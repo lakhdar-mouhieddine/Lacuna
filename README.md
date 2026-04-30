@@ -1,3 +1,3 @@
 # Lacuna
 
-Aucun code a compiler pour l'instant.
+Pour compiler le jeu : `javac -d bin src/lacuna/model/*.java`
