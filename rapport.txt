@@ -1,0 +1,6 @@
+Les diffucultés rencontrés:
+
+- Comment modéliser le tapis et les fleurs
+- pour que le jeu soit plus amusant à jouer, il faut avoir les images des fleurs et des pions et du tapis
+- Comment gérer les différents tours et phases
+- Comment gérer les fleurs capturées
