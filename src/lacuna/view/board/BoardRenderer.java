@@ -195,7 +195,7 @@ public final class BoardRenderer {
         int y = geometry.toScreenY(pawn.getY());
         int size = geometry.pawnSize();
 
-        GameAssets.drawFit(g2, GameAssets.pawn(pawn.getOwner().getIndex()), x, y - size / 2, size);
+        GameAssets.drawFit(g2, GameAssets.pawn(pawn.getOwner().getIndex()), x, y - size / 8, size);
     }
 
     private void drawPlacementPawn(Graphics2D g2, Pawn pawn) {
