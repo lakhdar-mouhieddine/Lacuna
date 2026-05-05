@@ -101,7 +101,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private JComponent createScoreItem(FlowerColor color) {
-        int playerScore = opponent().getScoreForColor(color);
+        int playerScore = player.getScoreForColor(color);
         int opponentScore = opponent().getScoreForColor(color);
         return new ScoreItem(
             String.valueOf(playerScore),
