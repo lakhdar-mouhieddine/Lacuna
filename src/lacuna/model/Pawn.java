@@ -1,4 +1,4 @@
-package lacuna;
+package lacuna.model;
 
 public class Pawn {
     private final Player owner;

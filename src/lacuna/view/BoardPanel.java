@@ -1,26 +1,31 @@
-package lacuna;
+package lacuna.view;
+
+import lacuna.model.GameModel;
+import lacuna.model.Flower;
+import lacuna.model.Pawn;
+import lacuna.model.Player;
+import lacuna.model.ModelListener;
+import lacuna.controller.GameController;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.geom.*;
-import java.util.List;
 
-public class BoardPanel extends JPanel {
+public class BoardPanel extends JPanel implements ModelListener {
     private static final double BOARD_SCALE = 0.95;
     private static final int FLOWER_RADIUS = 12;
     private static final int PAWNS_RADIUS = 10;
     
     private final GameModel model;
-    private final GameController controller;
+    private GameController controller;
     
     private Flower hoveredFlower = null;
     private Flower firstSelectedFlower = null;
     private Point mousePoint = null;
 
-    public BoardPanel(GameModel model, GameController controller) {
+    public BoardPanel(GameModel model) {
         this.model = model;
-        this.controller = controller;
+        this.model.addModelListener(this);
         setBackground(new Color(24, 30, 20));
         
         addMouseMotionListener(new MouseMotionAdapter() {
@@ -35,6 +40,19 @@ public class BoardPanel extends JPanel {
                 handleClick(e.getX(), e.getY(), e.getButton());
             }
         });
+    }
+
+    public void setController(GameController controller) {
+        this.controller = controller;
+    }
+
+    @Override
+    public void onModelUpdated() {
+        if (model.getPhase() != GameModel.GamePhase.PLACING) {
+            firstSelectedFlower = null;
+            hoveredFlower = null;
+        }
+        repaint();
     }
 
     private static final double TILT_FACTOR = 0.65;
@@ -75,16 +93,13 @@ public class BoardPanel extends JPanel {
     }
 
     private void handleClick(int x, int y, int button) {
-        if (model.getPhase() != GameModel.GamePhase.PLACING) return;
+        if (model.getPhase() != GameModel.GamePhase.PLACING || controller == null) return;
         
         if (button == MouseEvent.BUTTON3) {
             firstSelectedFlower = null;
             repaint();
             return;
         }
-
-        double modX = toModelX(x);
-        double modY = toModelY(y);
 
         if (firstSelectedFlower == null) {
             Flower clicked = flowerAt(x, y);
@@ -97,7 +112,7 @@ public class BoardPanel extends JPanel {
             if (clickedFlower != null) {
                 if (clickedFlower == firstSelectedFlower) {
                     firstSelectedFlower = null;
-                } else if (clickedFlower.getColorIndex() == firstSelectedFlower.getColorIndex()) {
+                } else if (clickedFlower.getColor() == firstSelectedFlower.getColor()) {
                     double mx = (firstSelectedFlower.getX() + clickedFlower.getX()) / 2.0;
                     double my = (firstSelectedFlower.getY() + clickedFlower.getY()) / 2.0;
                     if (model.estLigneValide(firstSelectedFlower, clickedFlower)) {
@@ -130,7 +145,7 @@ public class BoardPanel extends JPanel {
             
             boolean valide = false;
             if (hoveredFlower != null && hoveredFlower != firstSelectedFlower 
-                && hoveredFlower.getColorIndex() == firstSelectedFlower.getColorIndex()) {
+                && hoveredFlower.getColor() == firstSelectedFlower.getColor()) {
                 valide = model.estLigneValide(firstSelectedFlower, hoveredFlower);
             }
             
@@ -199,6 +214,8 @@ public class BoardPanel extends JPanel {
         int ry = (int)(FLOWER_RADIUS * TILT_FACTOR);
         int h = 4;
         
+        Color fColor = Theme.getColor(f.getColor());
+        
         if (f == firstSelectedFlower) {
             g2.setColor(new Color(255, 255, 255, 150));
             g2.fillOval(px - rx - 6, py - ry - 6, (rx+6)*2, (ry+6)*2);
@@ -210,16 +227,16 @@ public class BoardPanel extends JPanel {
         g2.setColor(new Color(0, 0, 0, 50));
         g2.fillOval(px - rx, py - ry + 4, rx*2, ry*2);
         
-        g2.setColor(f.getColor().darker().darker());
+        g2.setColor(fColor.darker().darker());
         g2.fillOval(px - rx, py - ry, rx*2, ry*2);
         g2.fillRect(px - rx, py - h, rx*2, h);
         g2.drawArc(px - rx, py - ry, rx*2, ry*2, 180, 180);
         g2.drawLine(px - rx, py, px - rx, py - h);
         g2.drawLine(px + rx, py, px + rx, py - h);
         
-        g2.setColor(f.getColor());
+        g2.setColor(fColor);
         g2.fillOval(px - rx, py - h - ry, rx*2, ry*2);
-        g2.setColor(f.getColor().darker());
+        g2.setColor(fColor.darker());
         g2.setStroke(new BasicStroke(1.2f));
         g2.drawOval(px - rx, py - h - ry, rx*2, ry*2);
         
@@ -234,7 +251,7 @@ public class BoardPanel extends JPanel {
         int ry = (int)(PAWNS_RADIUS * TILT_FACTOR);
         int h = 18;
         
-        Color c = pw.getOwner().getColor();
+        Color c = Theme.getPlayerColor(pw.getOwner().getIndex());
         
         g2.setColor(new Color(0, 0, 0, 60));
         g2.fillOval(px - rx, py - ry + 6, rx*2, ry*2);

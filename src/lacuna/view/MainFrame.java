@@ -1,4 +1,7 @@
-package lacuna;
+package lacuna.view;
+
+import lacuna.model.GameModel;
+import lacuna.controller.GameController;
 
 import javax.swing.*;
 import java.awt.*;
@@ -8,6 +11,7 @@ public class MainFrame extends JFrame {
     private BoardPanel plateau;
     private PlayerPanel panelTop;
     private PlayerPanel panelBottom;
+    private GameController controleur;
 
     public MainFrame() {
         super("Lacuna");
@@ -28,11 +32,10 @@ public class MainFrame extends JFrame {
 
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
-        plateau = new BoardPanel(modele, null);
+        plateau = new BoardPanel(modele);
 
-        GameController controleur = new GameController(modele, plateau, panelTop, panelBottom);
-
-        plateau = new BoardPanel(modele, controleur);
+        controleur = new GameController(modele, this);
+        plateau.setController(controleur);
 
         getContentPane().removeAll();
         getContentPane().setLayout(new BorderLayout());

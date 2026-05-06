@@ -1,5 +1,5 @@
 # Lacuna
 
-Pour compiler le jeu : `javac -d bin src/lacuna/*.java`
-Pour exécuter le jeu : `java -cp bin lacuna.MainFrame`
+Pour compiler le jeu : `javac -d bin src/lacuna/model/*.java src/lacuna/view/*.java src/lacuna/controller/*.java`
+Pour exécuter le jeu : `java -cp bin lacuna.view.MainFrame`
 # lacuna

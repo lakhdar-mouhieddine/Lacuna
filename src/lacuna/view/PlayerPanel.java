@@ -1,11 +1,17 @@
-package lacuna;
+package lacuna.view;
+
+import lacuna.model.GameModel;
+import lacuna.model.Player;
+import lacuna.model.FlowerColor;
+import lacuna.model.ModelListener;
 
 import javax.swing.*;
 import java.awt.*;
 
-public class PlayerPanel extends JPanel {
+public class PlayerPanel extends JPanel implements ModelListener {
     private final GameModel model;
     private final Player player;
+    private final Color playerColor;
     
     private final JLabel labelMain;
     private final JPanel panelCouleurs;
@@ -13,6 +19,7 @@ public class PlayerPanel extends JPanel {
     public PlayerPanel(GameModel model, Player player, boolean isTop) {
         this.model = model;
         this.player = player;
+        this.playerColor = Theme.getPlayerColor(player.getIndex());
         
         setLayout(new BorderLayout(10, 10));
         setBackground(new Color(15, 17, 30));
@@ -21,7 +28,7 @@ public class PlayerPanel extends JPanel {
             BorderFactory.createMatteBorder(
                 isTop ? 0 : 3, 0, 
                 isTop ? 3 : 0, 0, 
-                player.getColor()
+                playerColor
             ),
             BorderFactory.createEmptyBorder(10, 20, 10, 20)
         ));
@@ -36,10 +43,16 @@ public class PlayerPanel extends JPanel {
         add(labelMain, BorderLayout.WEST);
         add(panelCouleurs, BorderLayout.EAST);
 
+        model.addModelListener(this);
         rafraichir();
     }
 
-    public void rafraichir() {
+    @Override
+    public void onModelUpdated() {
+        rafraichir();
+    }
+
+    private void rafraichir() {
         int restants = GameModel.PAWNS_PER_PLAYER - player.getPawnsPlaced();
         
         String texteInfo = player.getName() 
@@ -48,7 +61,7 @@ public class PlayerPanel extends JPanel {
             
         if (model.getPhase() == GameModel.GamePhase.PLACING && model.getJoueurCourant() == player) {
             texteInfo = "A VOTRE TOUR :  " + texteInfo;
-            labelMain.setForeground(player.getColor());
+            labelMain.setForeground(playerColor);
         } else if (model.getPhase() == GameModel.GamePhase.FINISHED && model.getVainqueur() == player) {
             texteInfo = "VAINQUEUR :  " + texteInfo;
             labelMain.setForeground(Color.YELLOW);
@@ -58,15 +71,16 @@ public class PlayerPanel extends JPanel {
         labelMain.setText(texteInfo);
 
         panelCouleurs.removeAll();
-        for (int i = 0; i < Flower.COLORS.length; i++) {
-            int score = player.getScoreForColor(i);
-            JLabel lblCouleur = new JLabel(Flower.COLOR_NAMES[i] + ": " + score);
+        for (FlowerColor fc : FlowerColor.values()) {
+            int score = player.getScoreForColor(fc);
+            Color c = Theme.getColor(fc);
+            JLabel lblCouleur = new JLabel(Theme.getName(fc) + ": " + score);
             lblCouleur.setFont(new Font("Segoe UI", Font.BOLD, 13));
-            lblCouleur.setForeground(Flower.COLORS[i]);
+            lblCouleur.setForeground(c);
             lblCouleur.setOpaque(true);
             lblCouleur.setBackground(new Color(25, 28, 48));
             lblCouleur.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Flower.COLORS[i].darker(), 1),
+                BorderFactory.createLineBorder(c.darker(), 1),
                 BorderFactory.createEmptyBorder(4, 8, 4, 8)
             ));
             panelCouleurs.add(lblCouleur);
