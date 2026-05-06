@@ -8,7 +8,7 @@ import java.awt.Rectangle;
 public final class BoardGeometry {
     private static final double BOARD_CENTER_X = 0.50;
     private static final double BOARD_CENTER_Y = 0.50;
-    private static final double BOARD_RADIUS_X = 0.280;
+    private static final double BOARD_RADIUS_X = 0.365;
     private static final double TILT_FACTOR = 0.70;
     private static final double DESIGN_BOARD_WIDTH = 957.0;
     private static final double FLOWER_SCALE = 0.65;
