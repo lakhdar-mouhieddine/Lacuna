@@ -1,0 +1,6 @@
+Les difficultes rencontres:
+
+- Comment modeliser le tapis et les fleurs
+- pour que le jeu soit plus amusant a jouer, il faut avoir les images des fleurs et des pions et du tapis
+- Comment gerer les differents tours et phases
+- Comment gerer les fleurs capturees
