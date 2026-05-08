@@ -1,42 +1,67 @@
 package lacuna.view;
 
-import lacuna.model.GameModel;
+import lacuna.controller.GameController;
 import lacuna.model.Flower;
+import lacuna.model.GameModel;
+import lacuna.model.ModelListener;
 import lacuna.model.Pawn;
 import lacuna.model.Player;
-import lacuna.model.ModelListener;
-import lacuna.controller.GameController;
+import lacuna.view.board.BoardGeometry;
+import lacuna.view.board.BoardRenderer;
+import lacuna.view.board.FlowerIntroAnimator;
+import lacuna.view.board.PlacementAnimator;
+import lacuna.view.board.ResolutionAnimator;
+import lacuna.view.board.ToastMessage;
+import lacuna.view.board.WordSplashAnimator;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
 
 public class BoardPanel extends JPanel implements ModelListener {
-    private static final double BOARD_SCALE = 0.95;
-    private static final int FLOWER_RADIUS = 12;
-    private static final int PAWNS_RADIUS = 10;
-    
+    private static final int LETS_PLAY_SPLASH_MS = 1150;
+    private static final int HOLD_UP_SPLASH_MS = 1200;
+    private static final int GAME_OVER_SPLASH_MS = 950;
+
     private final GameModel model;
+    private final BoardGeometry geometry;
+    private final WordSplashAnimator wordSplash;
+    private final FlowerIntroAnimator flowerIntro;
+    private final PlacementAnimator placement;
+    private final ResolutionAnimator resolution;
+    private final ToastMessage toast;
+    private final BoardRenderer renderer;
+
     private GameController controller;
-    
-    private Flower hoveredFlower = null;
-    private Flower firstSelectedFlower = null;
-    private Point mousePoint = null;
+    private Flower hoveredFlower;
+    private Flower firstSelectedFlower;
+    private Point mousePoint;
+    private Runnable onResolutionFinished;
 
     public BoardPanel(GameModel model) {
         this.model = model;
+        this.geometry = new BoardGeometry(this);
+        this.wordSplash = new WordSplashAnimator(this);
+        this.flowerIntro = new FlowerIntroAnimator(model, this);
+        this.placement = new PlacementAnimator(this);
+        this.resolution = new ResolutionAnimator(model, geometry, this);
+        this.toast = new ToastMessage(this);
+        this.renderer = new BoardRenderer(model, geometry, this, wordSplash, flowerIntro, placement, resolution);
+
         this.model.addModelListener(this);
-        setBackground(new Color(24, 30, 20));
-        
+        setBackground(new Color(20, 22, 28));
         addMouseMotionListener(new MouseMotionAdapter() {
-            @Override public void mouseMoved(MouseEvent e) {
+            @Override
+            public void mouseMoved(MouseEvent e) {
                 mousePoint = e.getPoint();
                 updateHover(e.getX(), e.getY());
             }
         });
-        
         addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) {
+            @Override
+            public void mouseClicked(MouseEvent e) {
                 handleClick(e.getX(), e.getY(), e.getButton());
             }
         });
@@ -47,45 +72,66 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     @Override
+    public void addNotify() {
+        super.addNotify();
+        wordSplash.start(GameAssets.letsPlay(), LETS_PLAY_SPLASH_MS, flowerIntro::start);
+    }
+
+    @Override
+    public void removeNotify() {
+        flowerIntro.stop();
+        placement.stop();
+        resolution.clear();
+        wordSplash.stop();
+        toast.stop();
+        super.removeNotify();
+    }
+
+    public void jouerAnimationResolution(Runnable onFinished) {
+        clearSelection();
+        onResolutionFinished = onFinished;
+        resolution.prepare();
+
+        if (!resolution.hasSteps()) {
+            finishResolutionAnimation();
+            return;
+        }
+
+        wordSplash.start(GameAssets.holdUp(), HOLD_UP_SPLASH_MS,
+            () -> resolution.start(() -> wordSplash.start(
+                GameAssets.gameOver(),
+                GAME_OVER_SPLASH_MS,
+                this::finishResolutionAnimation
+            ))
+        );
+    }
+
+    @Override
     public void onModelUpdated() {
         if (model.getPhase() != GameModel.GamePhase.PLACING) {
-            firstSelectedFlower = null;
-            hoveredFlower = null;
+            clearSelection();
         }
         repaint();
     }
 
-    private static final double TILT_FACTOR = 0.65;
-
-    private double getPixelScale() {
-        return Math.min(getWidth(), getHeight()) / 2.0 * BOARD_SCALE;
-    }
-    
-    private int toScreenX(double modX) { return (int) (getWidth() / 2.0 + modX * getPixelScale()); }
-    private int toScreenY(double modY) { return (int) (getHeight() / 2.0 + modY * getPixelScale() * TILT_FACTOR); }
-    
-    private double toModelX(int scrX) { return (scrX - getWidth() / 2.0) / getPixelScale(); }
-    private double toModelY(int scrY) { return (scrY - getHeight() / 2.0) / (getPixelScale() * TILT_FACTOR); }
-
-    private Flower flowerAt(int x, int y) {
-        double mx = toModelX(x);
-        double my = toModelY(y);
-        double threshold = (FLOWER_RADIUS + 4) / getPixelScale();
-        
-        for (Flower f : model.getFleurs()) {
-            if (f.isOnBoard() && f.distanceTo(mx, my) <= threshold) {
-                return f;
-            }
-        }
-        return null;
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        Graphics2D g2 = (Graphics2D) g.create();
+        GameAssets.prepare(g2);
+        renderer.paint(g2, firstSelectedFlower, hoveredFlower, mousePoint);
+        toast.paint(g2);
+        g2.dispose();
     }
 
     private void updateHover(int x, int y) {
-        if (model.getPhase() != GameModel.GamePhase.PLACING) return;
-        
-        Flower f = flowerAt(x, y);
-        if (f != hoveredFlower) {
-            hoveredFlower = f;
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING) {
+            return;
+        }
+
+        Flower flower = flowerAt(x, y);
+        if (flower != hoveredFlower) {
+            hoveredFlower = flower;
             repaint();
         } else if (firstSelectedFlower != null) {
             repaint();
@@ -93,8 +139,10 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void handleClick(int x, int y, int button) {
-        if (model.getPhase() != GameModel.GamePhase.PLACING || controller == null) return;
-        
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null) {
+            return;
+        }
+
         if (button == MouseEvent.BUTTON3) {
             firstSelectedFlower = null;
             repaint();
@@ -107,168 +155,91 @@ public class BoardPanel extends JPanel implements ModelListener {
                 firstSelectedFlower = clicked;
                 repaint();
             }
+            return;
+        }
+
+        Flower clickedFlower = flowerAt(x, y);
+        if (clickedFlower != null) {
+            placePawnIfValid(clickedFlower);
         } else {
-            Flower clickedFlower = flowerAt(x, y);
-            if (clickedFlower != null) {
-                if (clickedFlower == firstSelectedFlower) {
-                    firstSelectedFlower = null;
-                } else if (clickedFlower.getColor() == firstSelectedFlower.getColor()) {
-                    double mx = (firstSelectedFlower.getX() + clickedFlower.getX()) / 2.0;
-                    double my = (firstSelectedFlower.getY() + clickedFlower.getY()) / 2.0;
-                    if (model.estLigneValide(firstSelectedFlower, clickedFlower)) {
-                        controller.onPlacementValid(firstSelectedFlower, clickedFlower, mx, my);
-                        firstSelectedFlower = null;
-                    } else {
-                        JOptionPane.showMessageDialog(this, "Ligne invalide : elle traverse d'autres pièces !");
-                    }
-                } else {
-                    JOptionPane.showMessageDialog(this, "La deuxième fleur doit être de la même couleur !");
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Veuillez cliquer sur la DEUXIÈME fleur de même couleur.\nLe pion sera placé au milieu.");
+            toast.show("Choisis une deuxieme fleur de meme couleur.");
+        }
+        repaint();
+    }
+
+    private void placePawnIfValid(Flower clickedFlower) {
+        if (clickedFlower == firstSelectedFlower) {
+            firstSelectedFlower = null;
+            return;
+        }
+
+        if (clickedFlower.getColor() != firstSelectedFlower.getColor()) {
+            toast.show("Les deux fleurs doivent avoir la meme couleur.");
+            return;
+        }
+
+        Flower firstFlower = firstSelectedFlower;
+        double modelX = (firstFlower.getX() + clickedFlower.getX()) / 2.0;
+        double modelY = (firstFlower.getY() + clickedFlower.getY()) / 2.0;
+        if (model.estLigneValide(firstFlower, clickedFlower)) {
+            Pawn placedPawn = nextUnplacedPawn(model.getJoueurCourant());
+            boolean success = controller.onPlacementValid(firstFlower, clickedFlower, modelX, modelY);
+            firstSelectedFlower = null;
+            if (success && placedPawn != null) {
+                placement.start(placedPawn, firstFlower, clickedFlower, this::finishPlacementAnimation);
             }
-            repaint();
+        } else {
+            toast.show("La ligne traverse une autre piece.");
         }
     }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        Graphics2D g2 = (Graphics2D) g;
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        dessinerTapis(g2);
-        
-        if (firstSelectedFlower != null && mousePoint != null) {
-            int sx = toScreenX(firstSelectedFlower.getX());
-            int sy = toScreenY(firstSelectedFlower.getY());
-            
-            boolean valide = false;
-            if (hoveredFlower != null && hoveredFlower != firstSelectedFlower 
-                && hoveredFlower.getColor() == firstSelectedFlower.getColor()) {
-                valide = model.estLigneValide(firstSelectedFlower, hoveredFlower);
-            }
-            
-            g2.setColor(valide ? new Color(100, 255, 100, 150) : new Color(255, 255, 255, 80));
-            g2.setStroke(new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{5}, 0));
-            g2.drawLine(sx, sy, mousePoint.x, mousePoint.y);
-            
-            if (valide && hoveredFlower != null) {
-                int mx = (sx + toScreenX(hoveredFlower.getX())) / 2;
-                int my = (sy + toScreenY(hoveredFlower.getY())) / 2;
-                int rx = PAWNS_RADIUS;
-                int ry = (int)(PAWNS_RADIUS * TILT_FACTOR);
-                g2.setColor(new Color(255, 255, 255, 100));
-                g2.fillOval(mx - rx, my - ry, rx*2, ry*2);
-            }
+    private void finishPlacementAnimation() {
+        if (controller != null) {
+            controller.onPlacementAnimationFinished();
         }
-
-        dessinerElements3D(g2);
     }
 
-    private void dessinerTapis(Graphics2D g2) {
-        int cx = getWidth()/2;
-        int cy = getHeight()/2;
-        int rx = (int)(getPixelScale() / BOARD_SCALE);
-        int ry = (int)(rx * TILT_FACTOR);
-        int epaisseur = 12;
-        
-        g2.setColor(new Color(15, 25, 15));
-        g2.fillOval(cx - rx, cy - ry + epaisseur, rx*2, ry*2);
-        g2.fillRect(cx - rx, cy, rx*2, epaisseur);
-        
-        g2.setColor(new Color(30, 45, 30));
-        g2.fillOval(cx - rx, cy - ry, rx*2, ry*2);
-        
-        g2.setColor(new Color(50, 70, 50));
-        g2.setStroke(new BasicStroke(3));
-        g2.drawOval(cx - rx, cy - ry, rx*2, ry*2);
+    private void finishResolutionAnimation() {
+        resolution.clear();
+        wordSplash.stop();
+        model.terminerResolution();
+
+        Runnable finished = onResolutionFinished;
+        onResolutionFinished = null;
+        if (finished != null) {
+            finished.run();
+        }
     }
 
-    private record Element3D(Object item, double y) {}
+    private Flower flowerAt(int x, int y) {
+        double modelX = geometry.toModelX(x);
+        double modelY = geometry.toModelY(y);
+        double threshold = (geometry.flowerSize() / 2.0 + 5) / geometry.pixelScale();
 
-    private void dessinerElements3D(Graphics2D g2) {
-        java.util.List<Element3D> elements = new java.util.ArrayList<>();
-        
-        for (Flower f : model.getFleurs()) {
-            if (f.isOnBoard()) elements.add(new Element3D(f, f.getY()));
-        }
-        for (Player p : model.getJoueurs()) {
-            for (Pawn pw : p.getPawns()) {
-                if (pw.isPlaced()) elements.add(new Element3D(pw, pw.getY()));
+        for (Flower flower : model.getFleurs()) {
+            if (flower.isOnBoard() && flower.distanceTo(modelX, modelY) <= threshold) {
+                return flower;
             }
         }
-        
-        elements.sort((e1, e2) -> Double.compare(e1.y(), e2.y()));
-        
-        for (Element3D e : elements) {
-            if (e.item() instanceof Flower f) dessinerFleur3D(g2, f);
-            else if (e.item() instanceof Pawn p) dessinerPion3D(g2, p);
-        }
+        return null;
     }
 
-    private void dessinerFleur3D(Graphics2D g2, Flower f) {
-        int px = toScreenX(f.getX());
-        int py = toScreenY(f.getY());
-        int rx = FLOWER_RADIUS;
-        int ry = (int)(FLOWER_RADIUS * TILT_FACTOR);
-        int h = 4;
-        
-        Color fColor = Theme.getColor(f.getColor());
-        
-        if (f == firstSelectedFlower) {
-            g2.setColor(new Color(255, 255, 255, 150));
-            g2.fillOval(px - rx - 6, py - ry - 6, (rx+6)*2, (ry+6)*2);
-        } else if (f == hoveredFlower && firstSelectedFlower == null) {
-            g2.setColor(new Color(255, 255, 255, 80));
-            g2.fillOval(px - rx - 4, py - ry - 4, (rx+4)*2, (ry+4)*2);
-        }
-        
-        g2.setColor(new Color(0, 0, 0, 50));
-        g2.fillOval(px - rx, py - ry + 4, rx*2, ry*2);
-        
-        g2.setColor(fColor.darker().darker());
-        g2.fillOval(px - rx, py - ry, rx*2, ry*2);
-        g2.fillRect(px - rx, py - h, rx*2, h);
-        g2.drawArc(px - rx, py - ry, rx*2, ry*2, 180, 180);
-        g2.drawLine(px - rx, py, px - rx, py - h);
-        g2.drawLine(px + rx, py, px + rx, py - h);
-        
-        g2.setColor(fColor);
-        g2.fillOval(px - rx, py - h - ry, rx*2, ry*2);
-        g2.setColor(fColor.darker());
-        g2.setStroke(new BasicStroke(1.2f));
-        g2.drawOval(px - rx, py - h - ry, rx*2, ry*2);
-        
-        g2.setColor(new Color(255, 255, 255, 180));
-        g2.fillOval(px - 2, py - h - 2, 4, 4);
+    private void clearSelection() {
+        firstSelectedFlower = null;
+        hoveredFlower = null;
+        mousePoint = null;
     }
 
-    private void dessinerPion3D(Graphics2D g2, Pawn pw) {
-        int px = toScreenX(pw.getX());
-        int py = toScreenY(pw.getY());
-        int rx = PAWNS_RADIUS;
-        int ry = (int)(PAWNS_RADIUS * TILT_FACTOR);
-        int h = 18;
-        
-        Color c = Theme.getPlayerColor(pw.getOwner().getIndex());
-        
-        g2.setColor(new Color(0, 0, 0, 60));
-        g2.fillOval(px - rx, py - ry + 6, rx*2, ry*2);
-        
-        g2.setColor(c.darker());
-        g2.fillOval(px - rx, py - ry, rx*2, ry*2);
-        g2.fillRect(px - rx, py - h, rx*2, h);
-        g2.setColor(c.darker().darker());
-        g2.setStroke(new BasicStroke(1f));
-        g2.drawArc(px - rx, py - ry, rx*2, ry*2, 180, 180);
-        g2.drawLine(px - rx, py, px - rx, py - h);
-        g2.drawLine(px + rx, py, px + rx, py - h);
-        
-        g2.setColor(c);
-        g2.fillOval(px - rx, py - h - ry, rx*2, ry*2);
-        g2.setColor(Color.WHITE);
-        g2.setStroke(new BasicStroke(1.5f));
-        g2.drawOval(px - rx, py - h - ry, rx*2, ry*2);
+    private boolean isInputBlocked() {
+        return wordSplash.active() || flowerIntro.blocksInput() || placement.active();
+    }
+
+    private Pawn nextUnplacedPawn(Player player) {
+        for (Pawn pawn : player.getPawns()) {
+            if (!pawn.isPlaced()) {
+                return pawn;
+            }
+        }
+        return null;
     }
 }

@@ -2,11 +2,13 @@ package lacuna.view;
 
 import lacuna.model.GameModel;
 import lacuna.controller.GameController;
+import lacuna.view.menu.MainMenuPanel;
 
 import javax.swing.*;
 import java.awt.*;
 
 public class MainFrame extends JFrame {
+    private static final Integer TURN_GLOW_LAYER = JLayeredPane.DEFAULT_LAYER + 50;
 
     private BoardPanel plateau;
     private PlayerPanel panelTop;
@@ -16,15 +18,24 @@ public class MainFrame extends JFrame {
     public MainFrame() {
         super("Lacuna");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(780, 620));
+        setMinimumSize(new Dimension(920, 620));
 
-        String nom1 = demanderNom("Nom du Joueur 1 :", "Joueur 1");
-        String nom2 = demanderNom("Nom du Joueur 2 :", "Joueur 2");
-
-        construireInterface(nom1, nom2);
+        afficherMenu();
         pack();
         setLocationRelativeTo(null);
         setVisible(true);
+    }
+
+    private void afficherMenu() {
+        MainMenuPanel menu = new MainMenuPanel(this::demarrerPartieLocale);
+
+        setContentPane(menu);
+        revalidate();
+        repaint();
+    }
+
+    private void demarrerPartieLocale(String nom1, String nom2) {
+        construireInterface(nom1, nom2);
     }
 
     private void construireInterface(String nom1, String nom2) {
@@ -33,32 +44,53 @@ public class MainFrame extends JFrame {
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
         plateau = new BoardPanel(modele);
+        TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
         controleur = new GameController(modele, this);
         plateau.setController(controleur);
 
-        getContentPane().removeAll();
-        getContentPane().setLayout(new BorderLayout());
-        getContentPane().setBackground(new Color(20, 22, 35));
+        JPanel hud = new JPanel(new BorderLayout());
+        hud.setOpaque(false);
+        hud.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         
-        getContentPane().add(panelTop,     BorderLayout.NORTH);
-        getContentPane().add(plateau,      BorderLayout.CENTER);
-        getContentPane().add(panelBottom,  BorderLayout.SOUTH);
-        
-        getContentPane().revalidate();
-        getContentPane().repaint();
-    }
+        hud.add(panelTop, BorderLayout.NORTH);
+        hud.add(panelBottom, BorderLayout.SOUTH);
 
-    private String demanderNom(String invite, String valeurDefaut) {
-        String saisie = JOptionPane.showInputDialog(null, invite, valeurDefaut);
-        if (saisie == null || saisie.isBlank()) return valeurDefaut;
-        return saisie.trim();
+        JLayeredPane gameRoot = new JLayeredPane() {
+            @Override
+            public void doLayout() {
+                Dimension size = getSize();
+                plateau.setBounds(0, 0, size.width, size.height);
+                turnGlow.setBounds(0, 0, size.width, size.height);
+                hud.setBounds(0, 0, size.width, size.height);
+            }
+        };
+        gameRoot.setBackground(new Color(20, 22, 35));
+        gameRoot.setOpaque(true);
+        gameRoot.add(plateau, JLayeredPane.DEFAULT_LAYER);
+        gameRoot.add(turnGlow, TURN_GLOW_LAYER);
+        gameRoot.add(hud, JLayeredPane.PALETTE_LAYER);
+        
+        setContentPane(gameRoot);
+        revalidate();
+        repaint();
     }
 
     public void relancerPartie() {
-        String nom1 = demanderNom("Nom du Joueur 1 :", "Joueur 1");
-        String nom2 = demanderNom("Nom du Joueur 2 :", "Joueur 2");
-        construireInterface(nom1, nom2);
+        String[] noms = PlayerNamesDialog.show(this);
+        if (noms == null) {
+            retourMenuPrincipal();
+            return;
+        }
+        construireInterface(noms[0], noms[1]);
+    }
+
+    public void jouerAnimationResolution(Runnable apresAnimation) {
+        plateau.jouerAnimationResolution(apresAnimation);
+    }
+
+    public void retourMenuPrincipal() {
+        afficherMenu();
     }
 
     public static void main(String[] args) {

@@ -1,12 +1,15 @@
 package lacuna.controller;
 
-import lacuna.model.GameModel;
 import lacuna.model.Flower;
-import lacuna.model.Player;
 import lacuna.model.FlowerColor;
+import lacuna.model.GameModel;
+import lacuna.model.Player;
+import lacuna.view.GameResultDialog;
 import lacuna.view.MainFrame;
 
 import javax.swing.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class GameController {
@@ -18,51 +21,42 @@ public class GameController {
         this.mainFrame = mainFrame;
     }
 
-    public void onPlacementValid(Flower f1, Flower f2, double posX, double posY) {
+    public boolean onPlacementValid(Flower f1, Flower f2, double posX, double posY) {
         boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
-        if (!success) return;
+        return success;
+    }
 
+    public void onPlacementAnimationFinished() {
         if (model.getPhase() == GameModel.GamePhase.RESOLVING) {
-            Timer t = new Timer(1000, e -> {
-                model.resoudreProximite();
-                afficherResultat();
-            });
-            t.setRepeats(false);
-            t.start();
+            mainFrame.jouerAnimationResolution(this::afficherResultat);
         }
     }
 
     private void afficherResultat() {
         Player vainqueur = model.getVainqueur();
-        String msg = "Fin de partie !\n\n";
-        
         Map<FlowerColor, Integer> majorites = model.calculerMajoritesCouleurs();
-        int j1Maj = 0, j2Maj = 0;
-        
-        for (int m : majorites.values()) {
-            if (m == 0) j1Maj++;
-            if (m == 1) j2Maj++;
+        List<FlowerColor> j1Fleurs = new ArrayList<>();
+        List<FlowerColor> j2Fleurs = new ArrayList<>();
+
+        for (Map.Entry<FlowerColor, Integer> majorite : majorites.entrySet()) {
+            if (majorite.getValue() == 0) j1Fleurs.add(majorite.getKey());
+            if (majorite.getValue() == 1) j2Fleurs.add(majorite.getKey());
         }
 
-        msg += model.getJoueurs()[0].getName() + " remporte " + j1Maj + " couleurs.\n";
-        msg += model.getJoueurs()[1].getName() + " remporte " + j2Maj + " couleurs.\n\n";
+        GameResultDialog.Choice choix = GameResultDialog.show(
+            mainFrame,
+            "Résultats",
+            new GameResultDialog.PlayerFlowers[]{
+                new GameResultDialog.PlayerFlowers(model.getJoueurs()[0].getName(), j1Fleurs),
+                new GameResultDialog.PlayerFlowers(model.getJoueurs()[1].getName(), j2Fleurs)
+            },
+            vainqueur != null ? "Vainqueur : " + vainqueur.getName() : "Egalite"
+        );
 
-        if (vainqueur != null) {
-            msg += "Vainqueur : " + vainqueur.getName() + " !";
+        if (choix == GameResultDialog.Choice.REPLAY) {
+            SwingUtilities.invokeLater(mainFrame::relancerPartie);
         } else {
-            msg += "Égalité !";
-        }
-
-        int choix = JOptionPane.showOptionDialog(mainFrame, msg, "Victoire",
-            JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE, null,
-            new String[]{"Rejouer", "Quitter"}, "Rejouer");
-
-        if (choix == JOptionPane.YES_OPTION) {
-            SwingUtilities.invokeLater(() -> {
-                mainFrame.relancerPartie();
-            });
-        } else {
-            System.exit(0);
+            SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
         }
     }
 }

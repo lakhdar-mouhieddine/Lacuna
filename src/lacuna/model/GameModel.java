@@ -9,7 +9,8 @@ public class GameModel {
     public static final int NUM_FLOWERS = NUM_COLORS * FLOWERS_PER_COLOR;
     public static final int PAWNS_PER_PLAYER = 6;
     
-    private static final double MAX_RADIUS = 0.95;
+    private static final double MAX_RADIUS_X = 0.82;
+    private static final double MAX_RADIUS_Y = 0.72;
     public static final double HITBOX_RADIUS = 0.05;
 
     private final List<Flower> flowers;
@@ -62,9 +63,9 @@ public class GameModel {
             int tentatives = 0;
             while (!valid && tentatives < 500) {
                 double angle = rng.nextDouble() * 2 * Math.PI;
-                double r = Math.sqrt(rng.nextDouble()) * MAX_RADIUS;
-                x = r * Math.cos(angle);
-                y = r * Math.sin(angle);
+                double r = Math.sqrt(rng.nextDouble());
+                x = r * Math.cos(angle) * MAX_RADIUS_X;
+                y = r * Math.sin(angle) * MAX_RADIUS_Y;
                 
                 valid = true;
                 for (Flower f : flowers) {
@@ -142,26 +143,50 @@ public class GameModel {
     }
 
     public void resoudreProximite() {
-        List<Pawn> tousPions = new ArrayList<>();
-        for (Player p : players) tousPions.addAll(p.getPawns());
-
         for (Flower f : flowers) {
             if (!f.isOnBoard()) continue;
 
-            Pawn plusProche = null;
-            double distMin = Double.MAX_VALUE;
-            for (Pawn p : tousPions) {
-                if (!p.isPlaced()) continue;
-                double d = p.distanceTo(f);
-                if (d < distMin) {
-                    distMin = d;
-                    plusProche = p;
-                }
-            }
+            Pawn plusProche = trouverPionPlusProche(f);
 
             if (plusProche != null) {
                 plusProche.getOwner().captureFlower(f);
             }
+        }
+
+        phase = GamePhase.FINISHED;
+        notifyListeners();
+    }
+
+    public Pawn trouverPionPlusProche(Flower fleur) {
+        Pawn plusProche = null;
+        double distMin = Double.MAX_VALUE;
+
+        for (Player player : players) {
+            for (Pawn pion : player.getPawns()) {
+                if (!pion.isPlaced()) continue;
+                double distance = pion.distanceTo(fleur);
+                if (distance < distMin) {
+                    distMin = distance;
+                    plusProche = pion;
+                }
+            }
+        }
+
+        return plusProche;
+    }
+
+    public void capturerFleurResolution(Flower fleur, Pawn pion) {
+        if (phase != GamePhase.RESOLVING || fleur == null || pion == null || !fleur.isOnBoard()) {
+            return;
+        }
+
+        pion.getOwner().captureFlower(fleur);
+        notifyListeners();
+    }
+
+    public void terminerResolution() {
+        if (phase != GamePhase.RESOLVING) {
+            return;
         }
 
         phase = GamePhase.FINISHED;
