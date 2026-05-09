@@ -1,21 +1,24 @@
-package lacuna;
+package lacuna.model;
 
 import java.util.*;
 import java.awt.geom.Line2D;
 
 public class GameModel {
-    public static final int NUM_COLORS = 7;
+    public static final int NUM_COLORS = FlowerColor.values().length;
     public static final int FLOWERS_PER_COLOR = 7;
     public static final int NUM_FLOWERS = NUM_COLORS * FLOWERS_PER_COLOR;
     public static final int PAWNS_PER_PLAYER = 6;
     
-    private static final double MAX_RADIUS = 0.95;
+    private static final double MAX_RADIUS_X = 0.82;
+    private static final double MAX_RADIUS_Y = 0.72;
     public static final double HITBOX_RADIUS = 0.05;
 
     private final List<Flower> flowers;
     private final Player[] players;
     private int currentPlayerIndex;
     private GamePhase phase;
+
+    private final List<ModelListener> listeners = new ArrayList<>();
 
     public enum GamePhase {
         PLACING,
@@ -26,8 +29,8 @@ public class GameModel {
     public GameModel(String name1, String name2) {
         flowers = new ArrayList<>(NUM_FLOWERS);
         players = new Player[]{
-            new Player(name1, java.awt.Color.decode("#E53935")),
-            new Player(name2, java.awt.Color.decode("#1E88E5"))
+            new Player(name1, 0),
+            new Player(name2, 1)
         };
         currentPlayerIndex = 0;
         phase = GamePhase.PLACING;
@@ -36,10 +39,18 @@ public class GameModel {
         creerPions();
     }
 
+    public void addModelListener(ModelListener l) { listeners.add(l); }
+    public void removeModelListener(ModelListener l) { listeners.remove(l); }
+    private void notifyListeners() {
+        for (ModelListener l : listeners) {
+            l.onModelUpdated();
+        }
+    }
+
     private void genererFleursTapis() {
         Random rng = new Random();
-        List<Integer> poolCouleurs = new ArrayList<>(NUM_FLOWERS);
-        for (int c = 0; c < NUM_COLORS; c++) {
+        List<FlowerColor> poolCouleurs = new ArrayList<>(NUM_FLOWERS);
+        for (FlowerColor c : FlowerColor.values()) {
             for (int i = 0; i < FLOWERS_PER_COLOR; i++) poolCouleurs.add(c);
         }
         Collections.shuffle(poolCouleurs, rng);
@@ -52,9 +63,9 @@ public class GameModel {
             int tentatives = 0;
             while (!valid && tentatives < 500) {
                 double angle = rng.nextDouble() * 2 * Math.PI;
-                double r = Math.sqrt(rng.nextDouble()) * MAX_RADIUS;
-                x = r * Math.cos(angle);
-                y = r * Math.sin(angle);
+                double r = Math.sqrt(rng.nextDouble());
+                x = r * Math.cos(angle) * MAX_RADIUS_X;
+                y = r * Math.sin(angle) * MAX_RADIUS_Y;
                 
                 valid = true;
                 for (Flower f : flowers) {
@@ -77,7 +88,7 @@ public class GameModel {
 
     public boolean estLigneValide(Flower f1, Flower f2) {
         if (f1 == f2) return false;
-        if (f1.getColorIndex() != f2.getColorIndex()) return false;
+        if (f1.getColor() != f2.getColor()) return false;
         if (!f1.isOnBoard() || !f2.isOnBoard()) return false;
 
         Line2D.Double ligne = new Line2D.Double(f1.getX(), f1.getY(), f2.getX(), f2.getY());
@@ -114,6 +125,7 @@ public class GameModel {
         courant.captureFlower(f2);
 
         avancerTour();
+        notifyListeners();
         return true;
     }
 
@@ -131,22 +143,10 @@ public class GameModel {
     }
 
     public void resoudreProximite() {
-        List<Pawn> tousPions = new ArrayList<>();
-        for (Player p : players) tousPions.addAll(p.getPawns());
-
         for (Flower f : flowers) {
             if (!f.isOnBoard()) continue;
 
-            Pawn plusProche = null;
-            double distMin = Double.MAX_VALUE;
-            for (Pawn p : tousPions) {
-                if (!p.isPlaced()) continue;
-                double d = p.distanceTo(f);
-                if (d < distMin) {
-                    distMin = d;
-                    plusProche = p;
-                }
-            }
+            Pawn plusProche = trouverPionPlusProche(f);
 
             if (plusProche != null) {
                 plusProche.getOwner().captureFlower(f);
@@ -154,24 +154,61 @@ public class GameModel {
         }
 
         phase = GamePhase.FINISHED;
+        notifyListeners();
     }
 
-    public int[] calculerMajoritesCouleurs() {
-        int[] resultats = new int[NUM_COLORS];
-        for (int c = 0; c < NUM_COLORS; c++) {
+    public Pawn trouverPionPlusProche(Flower fleur) {
+        Pawn plusProche = null;
+        double distMin = Double.MAX_VALUE;
+
+        for (Player player : players) {
+            for (Pawn pion : player.getPawns()) {
+                if (!pion.isPlaced()) continue;
+                double distance = pion.distanceTo(fleur);
+                if (distance < distMin) {
+                    distMin = distance;
+                    plusProche = pion;
+                }
+            }
+        }
+
+        return plusProche;
+    }
+
+    public void capturerFleurResolution(Flower fleur, Pawn pion) {
+        if (phase != GamePhase.RESOLVING || fleur == null || pion == null || !fleur.isOnBoard()) {
+            return;
+        }
+
+        pion.getOwner().captureFlower(fleur);
+        notifyListeners();
+    }
+
+    public void terminerResolution() {
+        if (phase != GamePhase.RESOLVING) {
+            return;
+        }
+
+        phase = GamePhase.FINISHED;
+        notifyListeners();
+    }
+
+    public Map<FlowerColor, Integer> calculerMajoritesCouleurs() {
+        Map<FlowerColor, Integer> resultats = new EnumMap<>(FlowerColor.class);
+        for (FlowerColor c : FlowerColor.values()) {
             int scoreJ1 = players[0].getScoreForColor(c);
             int scoreJ2 = players[1].getScoreForColor(c);
-            if (scoreJ1 > scoreJ2) resultats[c] = 0;
-            else resultats[c] = 1;
+            if (scoreJ1 > scoreJ2) resultats.put(c, 0);
+            else resultats.put(c, 1);
         }
         return resultats;
     }
 
     public Player getVainqueur() {
         if (phase != GamePhase.FINISHED) return null;
-        int[] majorites = calculerMajoritesCouleurs();
+        Map<FlowerColor, Integer> majorites = calculerMajoritesCouleurs();
         int couleursJ1 = 0, couleursJ2 = 0;
-        for (int m : majorites) {
+        for (int m : majorites.values()) {
             if (m == 0) couleursJ1++;
             if (m == 1) couleursJ2++;
         }
