@@ -12,7 +12,7 @@ public class Theme {
     static {
         FLOWER_COLORS.put(FlowerColor.RED, new Color(220, 50, 50));
         FLOWER_COLORS.put(FlowerColor.ORANGE, new Color(255, 165, 0));
-        FLOWER_COLORS.put(FlowerColor.YELLOW, new Color(240, 220, 0));
+        FLOWER_COLORS.put(FlowerColor.CYAN, new Color(0, 210, 210));
         FLOWER_COLORS.put(FlowerColor.GREEN, new Color(50, 180, 50));
         FLOWER_COLORS.put(FlowerColor.BLUE, new Color(50, 130, 220));
         FLOWER_COLORS.put(FlowerColor.PURPLE, new Color(140, 60, 200));
@@ -20,7 +20,7 @@ public class Theme {
 
         FLOWER_NAMES.put(FlowerColor.RED, "Rouge");
         FLOWER_NAMES.put(FlowerColor.ORANGE, "Orange");
-        FLOWER_NAMES.put(FlowerColor.YELLOW, "Jaune");
+        FLOWER_NAMES.put(FlowerColor.CYAN, "Cyan");
         FLOWER_NAMES.put(FlowerColor.GREEN, "Vert");
         FLOWER_NAMES.put(FlowerColor.BLUE, "Bleu");
         FLOWER_NAMES.put(FlowerColor.PURPLE, "Violet");

@@ -19,7 +19,7 @@ public final class GameAssets {
     private static final BufferedImage ORANGE_FLOWER = load("clear_orange.png");
     private static final BufferedImage PINK_FLOWER = load("clear_pink.png");
     private static final BufferedImage PURPLE_FLOWER = load("clear_purple.png");
-    private static final BufferedImage YELLOW_FLOWER = load("clear_red.png");
+    private static final BufferedImage RED_FLOWER = load("clear_red.png");
     private static final BufferedImage SILVER_PAWN = load("silver_pawn.png");
     private static final BufferedImage GOLD_PAWN = load("gold_pawn.png");
     private static final BufferedImage LETS_PLAY = load("lets_play.png");
@@ -38,10 +38,10 @@ public final class GameAssets {
             case BLUE -> BLUE_FLOWER;
             case GREEN -> GREEN_FLOWER;
             case ORANGE -> ORANGE_FLOWER;
-            case RED -> CYAN_FLOWER;
+            case RED -> RED_FLOWER;
             case PINK -> PINK_FLOWER;
             case PURPLE -> PURPLE_FLOWER;
-            case YELLOW -> YELLOW_FLOWER;
+            case CYAN -> CYAN_FLOWER;
         };
     }
 

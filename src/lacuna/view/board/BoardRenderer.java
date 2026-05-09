@@ -5,6 +5,7 @@ import lacuna.model.GameModel;
 import lacuna.model.Pawn;
 import lacuna.model.Player;
 import lacuna.view.GameAssets;
+import lacuna.view.Theme;
 
 import javax.swing.JComponent;
 import java.awt.AlphaComposite;
@@ -15,6 +16,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.List;
 
 public final class BoardRenderer {
     private static final BasicStroke RESOLUTION_LINE_STROKE =
@@ -48,12 +50,12 @@ public final class BoardRenderer {
         this.resolution = resolution;
     }
 
-    public void paint(Graphics2D g2, Flower selectedFlower, Flower hoveredFlower, Point mousePoint) {
+    public void paint(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower, Point mousePoint) {
         drawBoard(g2);
         if (model.getPhase() == GameModel.GamePhase.PLACING) {
-            drawSelectionGuide(g2, selectedFlower, hoveredFlower, mousePoint);
+            drawSelectionGuide(g2, candidates, selectedIndex, hoveredFlower, mousePoint);
         }
-        drawElements(g2, selectedFlower, hoveredFlower);
+        drawElements(g2, null, hoveredFlower);
         drawPlacementFlowerAnimation(g2);
         drawResolutionEffect(g2);
         wordSplash.paint(g2);
@@ -72,28 +74,43 @@ public final class BoardRenderer {
         g2.drawImage(board, bounds.x, bounds.y, bounds.width, bounds.height, null);
     }
 
-    private void drawSelectionGuide(Graphics2D g2, Flower selectedFlower, Flower hoveredFlower, Point mousePoint) {
-        if (selectedFlower == null || mousePoint == null) {
-            return;
-        }
+    private void drawSelectionGuide(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower, Point mousePoint) {
+        if (mousePoint == null) return;
 
-        int startX = geometry.toScreenX(selectedFlower.getX());
-        int startY = geometry.toScreenY(selectedFlower.getY());
-        boolean valid = hoveredFlower != null
-            && hoveredFlower != selectedFlower
-            && hoveredFlower.getColor() == selectedFlower.getColor()
-            && model.estLigneValide(selectedFlower, hoveredFlower);
+        // pion fantôme au niveau du curseur
+        int pawnSize = geometry.pawnSize();
+        Composite oldComp = g2.getComposite();
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.6f));
+        GameAssets.drawFit(g2, GameAssets.pawn(model.getJoueurCourant().getIndex()), mousePoint.x, mousePoint.y - pawnSize / 8, pawnSize);
+        g2.setComposite(oldComp);
 
-        g2.setColor(valid ? new Color(110, 255, 155, 170) : new Color(255, 255, 255, 95));
-        g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{6f}, 0));
-        g2.drawLine(startX, startY, mousePoint.x, mousePoint.y);
+        if (candidates.isEmpty()) return;
 
-        if (valid) {
-            int markerX = (startX + geometry.toScreenX(hoveredFlower.getX())) / 2;
-            int markerY = (startY + geometry.toScreenY(hoveredFlower.getY())) / 2;
-            g2.setColor(new Color(255, 255, 255, 120));
-            int size = geometry.pawnSize();
-            g2.fillOval(markerX - size / 2, markerY - size / 2, size, size);
+        for (int i = 0; i < candidates.size(); i++) {
+            FlowerPair pair = candidates.get(i);
+            boolean isSelected = (i == selectedIndex);
+            Color pairColor = Theme.getColor(pair.f1().getColor());
+            
+            int x1 = geometry.toScreenX(pair.f1().getX());
+            int y1 = geometry.toScreenY(pair.f1().getY());
+            int x2 = geometry.toScreenX(pair.f2().getX());
+            int y2 = geometry.toScreenY(pair.f2().getY());
+
+            if (isSelected) {
+                g2.setColor(withAlpha(pairColor, 0.85f));
+                g2.setStroke(new BasicStroke(2.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            } else {
+                g2.setColor(withAlpha(pairColor, 0.35f));
+                g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{5f}, 0));
+            }
+            
+            g2.drawLine(x1, y1, x2, y2);
+            
+            if (isSelected) {
+                int midX = (x1 + x2) / 2;
+                int midY = (y1 + y2) / 2;
+                drawGlow(g2, midX, midY, (int)(pawnSize * 1.2), withAlpha(pairColor, 0.25f));
+            }
         }
     }
 

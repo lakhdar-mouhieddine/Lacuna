@@ -152,10 +152,10 @@ public final class GameResultDialog extends JDialog {
             case BLUE -> "Bleu";
             case GREEN -> "Vert";
             case ORANGE -> "Orange";
-            case RED -> "Cyan";
+            case RED -> "Rouge";
             case PINK -> "Rose";
             case PURPLE -> "Violet";
-            case YELLOW -> "Jaune";
+            case CYAN -> "Cyan";
         };
     }
 

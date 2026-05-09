@@ -14,6 +14,7 @@ final class MenuAssets {
 
     static BufferedImage load(String name) {
         List<Path> candidates = List.of(
+            Path.of("assets", "main-menu", name),
             Path.of("assets", name),
             Path.of("lacuna", "assets", name),
             Path.of("..", "lacuna", "assets", name)

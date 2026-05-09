@@ -19,6 +19,11 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
+import java.awt.event.MouseWheelEvent;
+import java.awt.event.MouseWheelListener;
+import java.util.ArrayList;
+import java.util.List;
+import lacuna.view.board.FlowerPair;
 
 public class BoardPanel extends JPanel implements ModelListener {
     private static final int LETS_PLAY_SPLASH_MS = 1150;
@@ -36,9 +41,11 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     private GameController controller;
     private Flower hoveredFlower;
-    private Flower firstSelectedFlower;
     private Point mousePoint;
     private Runnable onResolutionFinished;
+
+    private List<FlowerPair> candidatePairs = new ArrayList<>();
+    private int selectedPairIndex = 0;
 
     public BoardPanel(GameModel model) {
         this.model = model;
@@ -63,6 +70,12 @@ public class BoardPanel extends JPanel implements ModelListener {
             @Override
             public void mouseClicked(MouseEvent e) {
                 handleClick(e.getX(), e.getY(), e.getButton());
+            }
+        });
+        addMouseWheelListener(new MouseWheelListener() {
+            @Override
+            public void mouseWheelMoved(MouseWheelEvent e) {
+                handleMouseWheel(e.getWheelRotation());
             }
         });
     }
@@ -119,7 +132,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
         GameAssets.prepare(g2);
-        renderer.paint(g2, firstSelectedFlower, hoveredFlower, mousePoint);
+        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, mousePoint);
         toast.paint(g2);
         g2.dispose();
     }
@@ -129,13 +142,60 @@ public class BoardPanel extends JPanel implements ModelListener {
             return;
         }
 
-        Flower flower = flowerAt(x, y);
-        if (flower != hoveredFlower) {
-            hoveredFlower = flower;
-            repaint();
-        } else if (firstSelectedFlower != null) {
-            repaint();
+        hoveredFlower = flowerAt(x, y);
+        updateCandidatePairs(x, y);
+        repaint();
+    }
+
+    private void updateCandidatePairs(int x, int y) {
+        double modelX = geometry.toModelX(x);
+        double modelY = geometry.toModelY(y);
+        double threshold = 25.0 / geometry.pixelScale();
+
+        List<FlowerPair> newCandidates = new ArrayList<>();
+        List<Flower> flowers = model.getFleurs();
+
+        for (int i = 0; i < flowers.size(); i++) {
+            Flower f1 = flowers.get(i);
+            if (!f1.isOnBoard()) continue;
+            for (int j = i + 1; j < flowers.size(); j++) {
+                Flower f2 = flowers.get(j);
+                if (!f2.isOnBoard() || f1.getColor() != f2.getColor()) continue;
+
+                double midX = (f1.getX() + f2.getX()) / 2.0;
+                double midY = (f1.getY() + f2.getY()) / 2.0;
+
+                double dx = midX - modelX;
+                double dy = midY - modelY;
+                if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+                    if (model.estLigneValide(f1, f2)) {
+                        newCandidates.add(new FlowerPair(f1, f2));
+                    }
+                }
+            }
         }
+
+        if (!areCandidateListsEqual(candidatePairs, newCandidates)) {
+            candidatePairs = newCandidates;
+            selectedPairIndex = 0;
+        }
+    }
+
+    private boolean areCandidateListsEqual(List<FlowerPair> list1, List<FlowerPair> list2) {
+        if (list1.size() != list2.size()) return false;
+        for (int i = 0; i < list1.size(); i++) {
+            if (list1.get(i).f1() != list2.get(i).f1() || list1.get(i).f2() != list2.get(i).f2()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void handleMouseWheel(int rotation) {
+        if (candidatePairs.isEmpty()) return;
+        selectedPairIndex = (selectedPairIndex + rotation) % candidatePairs.size();
+        if (selectedPairIndex < 0) selectedPairIndex += candidatePairs.size();
+        repaint();
     }
 
     private void handleClick(int x, int y, int button) {
@@ -143,50 +203,26 @@ public class BoardPanel extends JPanel implements ModelListener {
             return;
         }
 
-        if (button == MouseEvent.BUTTON3) {
-            firstSelectedFlower = null;
-            repaint();
+        if (candidatePairs.isEmpty()) {
+            toast.show("Place le curseur entre deux fleurs de meme couleur.");
             return;
         }
 
-        if (firstSelectedFlower == null) {
-            Flower clicked = flowerAt(x, y);
-            if (clicked != null) {
-                firstSelectedFlower = clicked;
-                repaint();
-            }
-            return;
-        }
-
-        Flower clickedFlower = flowerAt(x, y);
-        if (clickedFlower != null) {
-            placePawnIfValid(clickedFlower);
-        } else {
-            toast.show("Choisis une deuxieme fleur de meme couleur.");
-        }
+        FlowerPair pair = candidatePairs.get(selectedPairIndex);
+        placePawnIfValid(pair.f1(), pair.f2());
         repaint();
     }
 
-    private void placePawnIfValid(Flower clickedFlower) {
-        if (clickedFlower == firstSelectedFlower) {
-            firstSelectedFlower = null;
-            return;
-        }
+    private void placePawnIfValid(Flower f1, Flower f2) {
+        double modelX = (f1.getX() + f2.getX()) / 2.0;
+        double modelY = (f1.getY() + f2.getY()) / 2.0;
 
-        if (clickedFlower.getColor() != firstSelectedFlower.getColor()) {
-            toast.show("Les deux fleurs doivent avoir la meme couleur.");
-            return;
-        }
-
-        Flower firstFlower = firstSelectedFlower;
-        double modelX = (firstFlower.getX() + clickedFlower.getX()) / 2.0;
-        double modelY = (firstFlower.getY() + clickedFlower.getY()) / 2.0;
-        if (model.estLigneValide(firstFlower, clickedFlower)) {
+        if (model.estLigneValide(f1, f2)) {
             Pawn placedPawn = nextUnplacedPawn(model.getJoueurCourant());
-            boolean success = controller.onPlacementValid(firstFlower, clickedFlower, modelX, modelY);
-            firstSelectedFlower = null;
+            boolean success = controller.onPlacementValid(f1, f2, modelX, modelY);
             if (success && placedPawn != null) {
-                placement.start(placedPawn, firstFlower, clickedFlower, this::finishPlacementAnimation);
+                placement.start(placedPawn, f1, f2, this::finishPlacementAnimation);
+                candidatePairs.clear();
             }
         } else {
             toast.show("La ligne traverse une autre piece.");
@@ -225,7 +261,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void clearSelection() {
-        firstSelectedFlower = null;
+        candidatePairs.clear();
+        selectedPairIndex = 0;
         hoveredFlower = null;
         mousePoint = null;
     }
