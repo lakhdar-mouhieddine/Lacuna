@@ -21,13 +21,19 @@ public final class ToastMessage {
     private Timer timer;
     private String text;
     private long startedAt;
+    private boolean showTop;
 
     public ToastMessage(JComponent component) {
         this.component = component;
     }
 
     public void show(String text) {
+        show(text, false);
+    }
+
+    public void show(String text, boolean top) {
         this.text = text;
+        this.showTop = top;
         startedAt = System.currentTimeMillis();
 
         if (timer == null) {
@@ -66,7 +72,8 @@ public final class ToastMessage {
         int width = textWidth + PADDING_X * 2;
         int height = metrics.getHeight() + PADDING_Y * 2;
         int x = (component.getWidth() - width) / 2;
-        int y = Math.round(component.getHeight() * 0.82f);
+        int y = showTop ? Math.round(component.getHeight() * 0.12f)
+                        : Math.round(component.getHeight() * 0.82f);
 
         Composite oldComposite = g2.getComposite();
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));

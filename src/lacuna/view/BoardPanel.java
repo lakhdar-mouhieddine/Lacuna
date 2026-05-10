@@ -226,7 +226,8 @@ public class BoardPanel extends JPanel implements ModelListener {
             controller.onPlacementAnimationFinished();
         }
         if (model.getPhase() == GameModel.GamePhase.PLACING) {
-            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !");
+            boolean isPlayer1 = model.getJoueurCourant().getIndex() == 0;
+            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", isPlayer1);
         }
     }
 
