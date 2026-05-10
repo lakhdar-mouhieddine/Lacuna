@@ -166,8 +166,6 @@ public final class BoardRenderer {
 
         if (flower == selectedFlower) {
             drawGlow(g2, x, y, size + 16, new Color(255, 255, 255, 145));
-        } else if (flower == hoveredFlower && selectedFlower == null) {
-            drawGlow(g2, x, y, size + 10, new Color(255, 255, 255, 85));
         }
 
         GameAssets.drawFit(g2, GameAssets.flower(flower.getColor()), x, y, size);

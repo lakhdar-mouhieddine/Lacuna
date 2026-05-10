@@ -26,9 +26,7 @@ import java.util.List;
 import lacuna.view.board.FlowerPair;
 
 public class BoardPanel extends JPanel implements ModelListener {
-    private static final int LETS_PLAY_SPLASH_MS = 1150;
-    private static final int HOLD_UP_SPLASH_MS = 1200;
-    private static final int GAME_OVER_SPLASH_MS = 950;
+
 
     private final GameModel model;
     private final BoardGeometry geometry;
@@ -87,7 +85,7 @@ public class BoardPanel extends JPanel implements ModelListener {
     @Override
     public void addNotify() {
         super.addNotify();
-        wordSplash.start(GameAssets.letsPlay(), LETS_PLAY_SPLASH_MS, flowerIntro::start);
+        flowerIntro.skipToEnd();
     }
 
     @Override
@@ -110,13 +108,7 @@ public class BoardPanel extends JPanel implements ModelListener {
             return;
         }
 
-        wordSplash.start(GameAssets.holdUp(), HOLD_UP_SPLASH_MS,
-            () -> resolution.start(() -> wordSplash.start(
-                GameAssets.gameOver(),
-                GAME_OVER_SPLASH_MS,
-                this::finishResolutionAnimation
-            ))
-        );
+        resolution.start(this::finishResolutionAnimation);
     }
 
     @Override

@@ -106,7 +106,8 @@ public class PlayerPanel extends JPanel implements ModelListener {
         return new ScoreItem(
             String.valueOf(playerScore),
             GameAssets.flower(color),
-            scoreAura(playerScore, opponentScore)
+            scoreAura(playerScore, opponentScore),
+            playerScore
         );
     }
 
@@ -172,16 +173,23 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private final class ScoreItem extends JComponent {
+        private static final int MINI_FLOWER_SIZE = 10;
+        private static final int MINI_GAP = 1;
+        private static final int MINI_COLS = 3;
+        private static final int MINI_ROWS = 2;
+
         private final String score;
         private final BufferedImage image;
         private final Color aura;
+        private final int count;
 
-        ScoreItem(String score, BufferedImage image, Color aura) {
+        ScoreItem(String score, BufferedImage image, Color aura, int count) {
             this.score = score;
             this.image = image;
             this.aura = aura;
+            this.count = count;
             setOpaque(false);
-            setFont(new Font("Segoe UI", Font.BOLD, 16));
+            setFont(new Font("Segoe UI", Font.BOLD, 14));
             setForeground(Color.WHITE);
             setPreferredSize(new Dimension(SCORE_ITEM_WIDTH, SCORE_ITEM_HEIGHT));
         }
@@ -191,21 +199,50 @@ public class PlayerPanel extends JPanel implements ModelListener {
             Graphics2D g2 = (Graphics2D) g.create();
             GameAssets.prepare(g2);
 
-            FontMetrics metrics = g2.getFontMetrics(getFont());
-            int iconX = getWidth() - ICON_SIZE - 7;
-            int iconCenterX = iconX + ICON_SIZE / 2;
             int centerY = getHeight() / 2;
-            int textWidth = metrics.stringWidth(score);
-            int textX = Math.max(0, iconX - SCORE_ICON_GAP - textWidth);
-            int textY = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
 
-            if (shouldShowAura()) {
-                drawAura(g2, iconCenterX, centerY);
+            if (shouldShowAura() && image != null) {
+                int auraCenterX = getWidth() / 2;
+                drawAura(g2, auraCenterX, centerY);
             }
-            g2.setFont(getFont());
-            g2.setColor(getForeground());
-            g2.drawString(score, textX, textY);
-            GameAssets.drawFit(g2, image, iconCenterX, centerY, ICON_SIZE);
+
+            // Draw mini flower grid filling the component area
+            if (count > 0 && image != null) {
+                int gridW = Math.min(count, MINI_COLS) * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
+                int rows = Math.min(MINI_ROWS, (count + MINI_COLS - 1) / MINI_COLS);
+                int gridH = rows * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
+                int gridStartX = (getWidth() - gridW) / 2;
+                int gridStartY = (getHeight() - gridH) / 2;
+                int maxDisplay = MINI_COLS * MINI_ROWS;
+                int displayCount = Math.min(count, maxDisplay);
+
+                for (int i = 0; i < displayCount; i++) {
+                    int col = i % MINI_COLS;
+                    int row = i / MINI_COLS;
+                    int fx = gridStartX + col * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
+                    int fy = gridStartY + row * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
+                    GameAssets.drawFit(g2, image, fx, fy, MINI_FLOWER_SIZE);
+                }
+
+                // If more flowers than grid can show, draw count text
+                if (count > maxDisplay) {
+                    g2.setFont(getFont());
+                    g2.setColor(getForeground());
+                    String extra = "+" + (count - maxDisplay);
+                    FontMetrics fm = g2.getFontMetrics();
+                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 2,
+                            centerY + fm.getAscent() / 2 - 1);
+                }
+            } else {
+                // No flowers: just draw the flower icon faded
+                if (image != null) {
+                    java.awt.Composite old = g2.getComposite();
+                    g2.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.3f));
+                    GameAssets.drawFit(g2, image, getWidth() / 2, centerY, ICON_SIZE);
+                    g2.setComposite(old);
+                }
+            }
+
             g2.dispose();
         }
 

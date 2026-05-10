@@ -47,6 +47,11 @@ public final class FlowerIntroAnimator {
         active = false;
     }
 
+    public void skipToEnd() {
+        stop();
+        flowersVisible = true;
+    }
+
     public boolean active() {
         return active;
     }
