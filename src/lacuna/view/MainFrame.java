@@ -27,7 +27,7 @@ public class MainFrame extends JFrame {
     }
 
     private void afficherMenu() {
-        MainMenuPanel menu = new MainMenuPanel(this::demarrerPartieLocale);
+        MainMenuPanel menu = new MainMenuPanel(this::demarrerPartieLocale, this::demarrerPartieAvecIA);
 
         setContentPane(menu);
         revalidate();
@@ -35,10 +35,14 @@ public class MainFrame extends JFrame {
     }
 
     private void demarrerPartieLocale(String nom1, String nom2) {
-        construireInterface(nom1, nom2);
+        construireInterface(nom1, nom2, -1);
     }
 
-    private void construireInterface(String nom1, String nom2) {
+    private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
+        construireInterface(nomJoueur, "IA (Facile)", 1);
+    }
+
+    private void construireInterface(String nom1, String nom2, int aiPlayerIndex) {
         GameModel modele = new GameModel(nom1, nom2);
 
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
@@ -46,7 +50,7 @@ public class MainFrame extends JFrame {
         plateau = new BoardPanel(modele);
         TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
-        controleur = new GameController(modele, this);
+        controleur = new GameController(modele, this, plateau, aiPlayerIndex);
         plateau.setController(controleur);
 
         JPanel hud = new JPanel(new BorderLayout());
@@ -77,12 +81,7 @@ public class MainFrame extends JFrame {
     }
 
     public void relancerPartie() {
-        String[] noms = PlayerNamesDialog.show(this);
-        if (noms == null) {
-            retourMenuPrincipal();
-            return;
-        }
-        construireInterface(noms[0], noms[1]);
+        afficherMenu();
     }
 
     public void jouerAnimationResolution(Runnable apresAnimation) {

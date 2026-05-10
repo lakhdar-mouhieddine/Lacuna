@@ -86,6 +86,9 @@ public class BoardPanel extends JPanel implements ModelListener {
     public void addNotify() {
         super.addNotify();
         flowerIntro.skipToEnd();
+        if (controller != null) {
+            controller.declencherCoupIASiNecessaire();
+        }
     }
 
     @Override
@@ -130,7 +133,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void updateHover(int x, int y) {
-        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING) {
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
+                || (controller != null && controller.isAiTurn())) {
             return;
         }
 
@@ -191,7 +195,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void handleClick(int x, int y, int button) {
-        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null) {
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null
+                || controller.isAiTurn()) {
             return;
         }
 
@@ -225,7 +230,8 @@ public class BoardPanel extends JPanel implements ModelListener {
         if (controller != null) {
             controller.onPlacementAnimationFinished();
         }
-        if (model.getPhase() == GameModel.GamePhase.PLACING) {
+        if (model.getPhase() == GameModel.GamePhase.PLACING
+                && (controller == null || !controller.isAiTurn())) {
             boolean isPlayer1 = model.getJoueurCourant().getIndex() == 0;
             toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", isPlayer1);
         }
@@ -264,7 +270,14 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private boolean isInputBlocked() {
-        return wordSplash.active() || flowerIntro.blocksInput() || placement.active();
+        return wordSplash.active() || flowerIntro.blocksInput() || placement.active()
+                || (controller != null && controller.isAiThinking());
+    }
+
+    public void jouerAnimationPionIA(Pawn pawn, Flower f1, Flower f2, Runnable onFinished) {
+        clearSelection();
+        placement.start(pawn, f1, f2, onFinished);
+        repaint();
     }
 
     private Pawn nextUnplacedPawn(Player player) {
