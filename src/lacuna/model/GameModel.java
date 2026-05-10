@@ -199,7 +199,7 @@ public class GameModel {
             int scoreJ1 = players[0].getScoreForColor(c);
             int scoreJ2 = players[1].getScoreForColor(c);
             if (scoreJ1 > scoreJ2) resultats.put(c, 0);
-            else resultats.put(c, 1);
+            else if (scoreJ2 > scoreJ1) resultats.put(c, 1);
         }
         return resultats;
     }
