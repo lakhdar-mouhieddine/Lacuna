@@ -19,6 +19,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
+import java.awt.image.BufferedImage;
 import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
@@ -26,6 +27,21 @@ import java.util.List;
 import lacuna.view.board.FlowerPair;
 
 public class BoardPanel extends JPanel implements ModelListener {
+    private static final Cursor BLANK_CURSOR = createBlankCursor();
+
+    private static Cursor createBlankCursor() {
+        try {
+            Toolkit toolkit = Toolkit.getDefaultToolkit();
+            Dimension dim = toolkit.getBestCursorSize(1, 1);
+            int w = Math.max(1, dim.width);
+            int h = Math.max(1, dim.height);
+            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            return toolkit.createCustomCursor(img, new Point(0, 0), "blank cursor");
+        } catch (Exception e) {
+            return Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
+        }
+    }
+
 
 
     private final GameModel model;
@@ -63,11 +79,30 @@ public class BoardPanel extends JPanel implements ModelListener {
                 mousePoint = e.getPoint();
                 updateHover(e.getX(), e.getY());
             }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                mousePoint = e.getPoint();
+                updateHover(e.getX(), e.getY());
+            }
         });
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 handleClick(e.getX(), e.getY(), e.getButton());
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                mousePoint = e.getPoint();
+                updateCursor();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                mousePoint = null;
+                updateCursor();
+                repaint();
             }
         });
         addMouseWheelListener(new MouseWheelListener() {
@@ -119,6 +154,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         if (model.getPhase() != GameModel.GamePhase.PLACING) {
             clearSelection();
         }
+        updateCursor();
         repaint();
     }
 
@@ -127,12 +163,14 @@ public class BoardPanel extends JPanel implements ModelListener {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
         GameAssets.prepare(g2);
-        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, mousePoint);
+        Point effectiveMousePoint = (isInputBlocked() || (controller != null && controller.isAiTurn())) ? null : mousePoint;
+        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, effectiveMousePoint);
         toast.paint(g2);
         g2.dispose();
     }
 
     private void updateHover(int x, int y) {
+        updateCursor();
         if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
                 || (controller != null && controller.isAiTurn())) {
             return;
@@ -141,6 +179,27 @@ public class BoardPanel extends JPanel implements ModelListener {
         hoveredFlower = flowerAt(x, y);
         updateCandidatePairs(x, y);
         repaint();
+    }
+
+    private void updateCursor() {
+        boolean shouldHide = !(isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
+                || (controller != null && controller.isAiTurn())
+                || mousePoint == null);
+
+        if (shouldHide && mousePoint != null) {
+            if (mousePoint.y < 60 || mousePoint.y > getHeight() - 60) {
+                shouldHide = false;
+            }
+        }
+
+        Cursor c = shouldHide ? BLANK_CURSOR : Cursor.getDefaultCursor();
+        if (getCursor() != c) {
+            setCursor(c);
+            Window window = SwingUtilities.getWindowAncestor(this);
+            if (window instanceof JFrame frame) {
+                frame.getContentPane().setCursor(c);
+            }
+        }
     }
 
     private void updateCandidatePairs(int x, int y) {
@@ -267,6 +326,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         selectedPairIndex = 0;
         hoveredFlower = null;
         mousePoint = null;
+        updateCursor();
     }
 
     private boolean isInputBlocked() {
