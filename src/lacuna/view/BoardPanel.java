@@ -205,7 +205,7 @@ public class BoardPanel extends JPanel implements ModelListener {
     private void updateCandidatePairs(int x, int y) {
         double modelX = geometry.toModelX(x);
         double modelY = geometry.toModelY(y);
-        double threshold = 25.0 / geometry.pixelScale();
+        double threshold = (geometry.pawnSize() / 2.2) / geometry.pixelScale();
 
         List<FlowerPair> newCandidates = new ArrayList<>();
         List<Flower> flowers = model.getFleurs();

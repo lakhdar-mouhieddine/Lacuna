@@ -24,6 +24,10 @@ public class PlayerPanel extends JPanel implements ModelListener {
     private final JLabel nameLabel;
     private final JLabel pawnLabel;
     private final JPanel scoreTab;
+    private final java.util.Map<FlowerColor, Integer> previousScores = new java.util.EnumMap<>(FlowerColor.class);
+    private final java.util.Map<FlowerColor, Integer> bonusValues = new java.util.EnumMap<>(FlowerColor.class);
+    private Timer bonusTimer;
+    private long bonusStartedAt;
     private Timer auraTimer;
     private long auraStartedAt;
     private float auraPulse;
@@ -81,6 +85,16 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private void rafraichir() {
+        for (FlowerColor color : FlowerColor.values()) {
+            int current = player.getScoreForColor(color);
+            int prev = previousScores.getOrDefault(color, 0);
+            if (current > prev) {
+                bonusValues.put(color, current - prev);
+                startBonusTimer();
+            }
+            previousScores.put(color, current);
+        }
+
         int remainingPawns = GameModel.PAWNS_PER_PLAYER - player.getPawnsPlaced();
 
         nameLabel.setText(player.getName());
@@ -115,7 +129,8 @@ public class PlayerPanel extends JPanel implements ModelListener {
             String.valueOf(playerScore),
             GameAssets.flower(color),
             scoreAura(playerScore, opponentScore),
-            playerScore
+            playerScore,
+            bonusValues.getOrDefault(color, 0)
         );
     }
 
@@ -158,6 +173,21 @@ public class PlayerPanel extends JPanel implements ModelListener {
         }
     }
 
+    private void startBonusTimer() {
+        bonusStartedAt = System.currentTimeMillis();
+        if (bonusTimer == null) {
+            bonusTimer = new Timer(50, e -> {
+                if (System.currentTimeMillis() - bonusStartedAt > 2000) {
+                    bonusValues.clear();
+                    bonusTimer.stop();
+                    bonusTimer = null;
+                }
+                scoreTab.repaint();
+            });
+            bonusTimer.start();
+        }
+    }
+
     private boolean shouldShowAura() {
         return model.getPhase() != GameModel.GamePhase.PLACING;
     }
@@ -190,12 +220,14 @@ public class PlayerPanel extends JPanel implements ModelListener {
         private final BufferedImage image;
         private final Color aura;
         private final int count;
+        private final int bonus;
 
-        ScoreItem(String score, BufferedImage image, Color aura, int count) {
+        ScoreItem(String score, BufferedImage image, Color aura, int count, int bonus) {
             this.score = score;
             this.image = image;
             this.aura = aura;
             this.count = count;
+            this.bonus = bonus;
             setOpaque(false);
             setFont(new Font("Segoe UI", Font.BOLD, 14));
             setForeground(Color.WHITE);
@@ -214,7 +246,6 @@ public class PlayerPanel extends JPanel implements ModelListener {
                 drawAura(g2, auraCenterX, centerY);
             }
 
-            // Draw mini flower grid filling the component area
             if (count > 0 && image != null) {
                 int gridW = Math.min(count, MINI_COLS) * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
                 int rows = Math.min(MINI_ROWS, (count + MINI_COLS - 1) / MINI_COLS);
@@ -232,7 +263,6 @@ public class PlayerPanel extends JPanel implements ModelListener {
                     GameAssets.drawFit(g2, image, fx, fy, MINI_FLOWER_SIZE);
                 }
 
-                // If more flowers than grid can show, draw count text
                 if (count > maxDisplay) {
                     g2.setFont(getFont());
                     g2.setColor(getForeground());
@@ -241,13 +271,17 @@ public class PlayerPanel extends JPanel implements ModelListener {
                     g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 2,
                             centerY + fm.getAscent() / 2 - 1);
                 }
-            } else {
-                // No flowers: just draw the flower icon faded
-                if (image != null) {
-                    java.awt.Composite old = g2.getComposite();
-                    g2.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.3f));
-                    GameAssets.drawFit(g2, image, getWidth() / 2, centerY, ICON_SIZE);
-                    g2.setComposite(old);
+            }
+
+            if (bonus > 0) {
+                long elapsed = System.currentTimeMillis() - bonusStartedAt;
+                if (elapsed < 2000) {
+                    float bAlpha = Math.max(0, 1f - elapsed / 2000f);
+                    float bOffset = elapsed / 50f;
+                    g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
+                    g2.setColor(new Color(100, 255, 150, Math.round(bAlpha * 255)));
+                    String msg = "+" + bonus;
+                    g2.drawString(msg, getWidth() - 20, centerY - Math.round(bOffset));
                 }
             }
 

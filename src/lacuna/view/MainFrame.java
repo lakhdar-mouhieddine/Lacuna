@@ -14,6 +14,9 @@ public class MainFrame extends JFrame {
     private PlayerPanel panelTop;
     private PlayerPanel panelBottom;
     private GameController controleur;
+    private String lastNom1;
+    private String lastNom2;
+    private int lastAiPlayerIndex;
 
     public MainFrame() {
         super("Lacuna");
@@ -43,6 +46,9 @@ public class MainFrame extends JFrame {
     }
 
     private void construireInterface(String nom1, String nom2, int aiPlayerIndex) {
+        this.lastNom1 = nom1;
+        this.lastNom2 = nom2;
+        this.lastAiPlayerIndex = aiPlayerIndex;
         GameModel modele = new GameModel(nom1, nom2);
 
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
@@ -81,7 +87,11 @@ public class MainFrame extends JFrame {
     }
 
     public void relancerPartie() {
-        afficherMenu();
+        if (lastNom1 != null) {
+            construireInterface(lastNom1, lastNom2, lastAiPlayerIndex);
+        } else {
+            afficherMenu();
+        }
     }
 
     public void jouerAnimationResolution(Runnable apresAnimation) {
