@@ -10,11 +10,10 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 
 public class PlayerPanel extends JPanel implements ModelListener {
-    private static final int PANEL_WIDTH = 84;
+    private static final int PANEL_WIDTH = 110;
     private static final int ICON_SIZE = 22;
-    private static final int SCORE_ITEM_WIDTH = 52;
+    private static final int SCORE_ITEM_WIDTH = 80;
     private static final int SCORE_ITEM_HEIGHT = 34;
-    private static final int SCORE_ICON_GAP = 6;
     private static final Color WIN_AURA = new Color(74, 218, 126);
     private static final Color LOSE_AURA = new Color(239, 80, 88);
     private static final Color TIE_AURA = new Color(174, 174, 184);
@@ -211,10 +210,9 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private final class ScoreItem extends JComponent {
-        private static final int MINI_FLOWER_SIZE = 10;
-        private static final int MINI_GAP = 1;
-        private static final int MINI_COLS = 3;
-        private static final int MINI_ROWS = 2;
+        private static final int STACK_SIZE = 22;
+        private static final int STACK_OFFSET = 8;
+        private static final int MAX_VISIBLE = 4;
 
         private final String score;
         private final BufferedImage image;
@@ -247,28 +245,25 @@ public class PlayerPanel extends JPanel implements ModelListener {
             }
 
             if (count > 0 && image != null) {
-                int gridW = Math.min(count, MINI_COLS) * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
-                int rows = Math.min(MINI_ROWS, (count + MINI_COLS - 1) / MINI_COLS);
-                int gridH = rows * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
-                int gridStartX = (getWidth() - gridW) / 2;
-                int gridStartY = (getHeight() - gridH) / 2;
-                int maxDisplay = MINI_COLS * MINI_ROWS;
-                int displayCount = Math.min(count, maxDisplay);
-
-                for (int i = 0; i < displayCount; i++) {
-                    int col = i % MINI_COLS;
-                    int row = i / MINI_COLS;
-                    int fx = gridStartX + col * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
-                    int fy = gridStartY + row * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
-                    GameAssets.drawFit(g2, image, fx, fy, MINI_FLOWER_SIZE);
+                int displayCount = Math.min(count, MAX_VISIBLE);
+                int totalWidth = STACK_SIZE + (displayCount - 1) * STACK_OFFSET;
+                int startX = (getWidth() - totalWidth) / 2 + STACK_SIZE / 2;
+                
+                if (count > MAX_VISIBLE) {
+                    startX -= 10;
                 }
 
-                if (count > maxDisplay) {
-                    g2.setFont(getFont());
+                for (int i = 0; i < displayCount; i++) {
+                    int fx = startX + i * STACK_OFFSET;
+                    GameAssets.drawFit(g2, image, fx, centerY, STACK_SIZE);
+                }
+
+                if (count > MAX_VISIBLE) {
+                    g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
                     g2.setColor(getForeground());
-                    String extra = "+" + (count - maxDisplay);
+                    String extra = "+" + (count - MAX_VISIBLE);
                     FontMetrics fm = g2.getFontMetrics();
-                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 2,
+                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 1,
                             centerY + fm.getAscent() / 2 - 1);
                 }
             }

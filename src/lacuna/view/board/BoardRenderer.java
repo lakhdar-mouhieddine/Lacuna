@@ -29,6 +29,8 @@ public final class BoardRenderer {
     private final FlowerIntroAnimator flowerIntro;
     private final PlacementAnimator placement;
     private final ResolutionAnimator resolution;
+    private BufferedImage cachedVoronoi;
+    private ResolutionAnimator.ResolutionPhase lastPhase;
 
     public BoardRenderer(
             GameModel model,
@@ -264,6 +266,8 @@ public final class BoardRenderer {
     private void drawResolutionPhase(Graphics2D g2) {
         ResolutionAnimator.ResolutionPhase phase = resolution.currentPhase();
         if (wordSplash.active() || model.getPhase() != GameModel.GamePhase.RESOLVING || phase == null) {
+            cachedVoronoi = null;
+            lastPhase = null;
             return;
         }
 
@@ -271,43 +275,18 @@ public final class BoardRenderer {
         float vanishProgress = resolution.vanishProgress();
         Color playerColor = phase.color();
 
-        int res = 2; 
-        int w = component.getWidth() / res;
-        int h = component.getHeight() / res;
-        BufferedImage voronoi = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        
-        List<Pawn> allPawns = new java.util.ArrayList<>();
-        for (Player p : model.getJoueurs()) {
-            for (Pawn pw : p.getPawns()) if (pw.isPlaced()) allPawns.add(pw);
+        if (phase != lastPhase || cachedVoronoi == null) {
+            lastPhase = phase;
+            updateVoronoiCache(phase);
         }
 
-        if (!allPawns.isEmpty()) {
-            for (int y = 0; y < h; y++) {
-                for (int x = 0; x < w; x++) {
-                    double mx = geometry.toModelX(x * res);
-                    double my = geometry.toModelY(y * res);
-                    
-                    Pawn closest = null;
-                    double minDist = Double.MAX_VALUE;
-                    for (Pawn p : allPawns) {
-                        double dx = p.getX() - mx;
-                        double dy = p.getY() - my;
-                        double d = Math.sqrt(dx * dx + dy * dy);
-                        if (d < minDist) {
-                            minDist = d;
-                            closest = p;
-                        }
-                    }
-                    
-                    if (closest != null && closest.getOwner() == phase.player()) {
-                        float alpha = 0.18f * (progress < 0.2f ? progress / 0.2f : (progress < 0.8f ? 1f : (1f - progress) / 0.2f));
-                        voronoi.setRGB(x, y, withAlpha(playerColor, alpha).getRGB());
-                    }
-                }
-            }
+        if (cachedVoronoi != null) {
+            float alpha = 0.18f * (progress < 0.2f ? progress / 0.2f : (progress < 0.8f ? 1f : (1f - progress) / 0.2f));
+            Composite old = g2.getComposite();
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+            g2.drawImage(cachedVoronoi, 0, 0, component.getWidth(), component.getHeight(), null);
+            g2.setComposite(old);
         }
-
-        g2.drawImage(voronoi, 0, 0, component.getWidth(), component.getHeight(), null);
 
         g2.setStroke(RESOLUTION_LINE_STROKE);
         float lineFade = progress < 0.82f ? 1f : Math.max(0f, (1f - progress) / 0.18f);
@@ -330,6 +309,41 @@ public final class BoardRenderer {
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         GameAssets.drawFit(g2, GameAssets.flower(step.flower().getColor()), step.flowerX(), step.flowerY(), size);
         g2.setComposite(oldComposite);
+    }
+
+    private void updateVoronoiCache(ResolutionAnimator.ResolutionPhase phase) {
+        int res = 4; 
+        int w = component.getWidth() / res;
+        int h = component.getHeight() / res;
+        cachedVoronoi = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+
+        List<Pawn> allPawns = new java.util.ArrayList<>();
+        for (Player p : model.getJoueurs()) {
+            for (Pawn pw : p.getPawns()) if (pw.isPlaced()) allPawns.add(pw);
+        }
+
+        if (allPawns.isEmpty()) return;
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                double mx = geometry.toModelX(x * res);
+                double my = geometry.toModelY(y * res);
+                Pawn closest = null;
+                double minDist = Double.MAX_VALUE;
+                for (Pawn p : allPawns) {
+                    double dx = p.getX() - mx;
+                    double dy = p.getY() - my;
+                    double d = dx * dx + dy * dy; // Distance au carré pour éviter Math.sqrt
+                    if (d < minDist) {
+                        minDist = d;
+                        closest = p;
+                    }
+                }
+                if (closest != null && closest.getOwner() == phase.player()) {
+                    cachedVoronoi.setRGB(x, y, phase.color().getRGB());
+                }
+            }
+        }
     }
 
     private void drawGlow(Graphics2D g2, int x, int y, int size, Color color) {
