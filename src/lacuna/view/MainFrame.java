@@ -57,8 +57,8 @@ public class MainFrame extends JFrame {
         hud.setOpaque(false);
         hud.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         
-        hud.add(panelTop, BorderLayout.NORTH);
-        hud.add(panelBottom, BorderLayout.SOUTH);
+        hud.add(panelTop, BorderLayout.WEST);
+        hud.add(panelBottom, BorderLayout.EAST);
 
         JLayeredPane gameRoot = new JLayeredPane() {
             @Override
@@ -69,7 +69,7 @@ public class MainFrame extends JFrame {
                 hud.setBounds(0, 0, size.width, size.height);
             }
         };
-        gameRoot.setBackground(new Color(20, 22, 35));
+        gameRoot.setBackground(new Color(15, 16, 22));
         gameRoot.setOpaque(true);
         gameRoot.add(plateau, JLayeredPane.DEFAULT_LAYER);
         gameRoot.add(turnGlow, TURN_GLOW_LAYER);

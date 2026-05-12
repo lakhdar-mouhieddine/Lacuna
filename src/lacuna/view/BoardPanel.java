@@ -187,7 +187,7 @@ public class BoardPanel extends JPanel implements ModelListener {
                 || mousePoint == null);
 
         if (shouldHide && mousePoint != null) {
-            if (mousePoint.y < 60 || mousePoint.y > getHeight() - 60) {
+            if (mousePoint.x < 100 || mousePoint.x > getWidth() - 100) {
                 shouldHide = false;
             }
         }
@@ -217,12 +217,9 @@ public class BoardPanel extends JPanel implements ModelListener {
                 Flower f2 = flowers.get(j);
                 if (!f2.isOnBoard() || f1.getColor() != f2.getColor()) continue;
 
-                double midX = (f1.getX() + f2.getX()) / 2.0;
-                double midY = (f1.getY() + f2.getY()) / 2.0;
 
-                double dx = midX - modelX;
-                double dy = midY - modelY;
-                if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+                java.awt.geom.Line2D.Double segment = new java.awt.geom.Line2D.Double(f1.getX(), f1.getY(), f2.getX(), f2.getY());
+                if (segment.ptSegDist(modelX, modelY) < threshold) {
                     if (model.estLigneValide(f1, f2)) {
                         newCandidates.add(new FlowerPair(f1, f2));
                     }
@@ -270,8 +267,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void placePawnIfValid(Flower f1, Flower f2) {
-        double modelX = (f1.getX() + f2.getX()) / 2.0;
-        double modelY = (f1.getY() + f2.getY()) / 2.0;
+        double modelX = geometry.toModelX(mousePoint.x);
+        double modelY = geometry.toModelY(mousePoint.y);
 
         if (model.estLigneValide(f1, f2)) {
             Pawn placedPawn = nextUnplacedPawn(model.getJoueurCourant());
@@ -292,7 +289,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         if (model.getPhase() == GameModel.GamePhase.PLACING
                 && (controller == null || !controller.isAiTurn())) {
             boolean isPlayer1 = model.getJoueurCourant().getIndex() == 0;
-            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", isPlayer1);
+            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", false);
         }
     }
 

@@ -9,8 +9,8 @@ public class GameModel {
     public static final int NUM_FLOWERS = NUM_COLORS * FLOWERS_PER_COLOR;
     public static final int PAWNS_PER_PLAYER = 6;
     
-    private static final double MAX_RADIUS_X = 0.82;
-    private static final double MAX_RADIUS_Y = 0.72;
+    private static final double MAX_RADIUS_X = 0.76;
+    private static final double MAX_RADIUS_Y = 0.88;
     public static final double HITBOX_RADIUS = 0.05;
 
     private final List<Flower> flowers;

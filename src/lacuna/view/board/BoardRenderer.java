@@ -19,10 +19,10 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 
 public final class BoardRenderer {
-    private static final BasicStroke RESOLUTION_LINE_STROKE =
-        new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-    private static final BasicStroke RESOLUTION_PULSE_STROKE =
-        new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+    private static final BasicStroke RESOLUTION_LINE_STROKE = new BasicStroke(1.8f, BasicStroke.CAP_ROUND,
+            BasicStroke.JOIN_ROUND);
+    private static final BasicStroke RESOLUTION_PULSE_STROKE = new BasicStroke(2.5f, BasicStroke.CAP_ROUND,
+            BasicStroke.JOIN_ROUND);
 
     private final GameModel model;
     private final BoardGeometry geometry;
@@ -33,14 +33,13 @@ public final class BoardRenderer {
     private final ResolutionAnimator resolution;
 
     public BoardRenderer(
-        GameModel model,
-        BoardGeometry geometry,
-        JComponent component,
-        WordSplashAnimator wordSplash,
-        FlowerIntroAnimator flowerIntro,
-        PlacementAnimator placement,
-        ResolutionAnimator resolution
-    ) {
+            GameModel model,
+            BoardGeometry geometry,
+            JComponent component,
+            WordSplashAnimator wordSplash,
+            FlowerIntroAnimator flowerIntro,
+            PlacementAnimator placement,
+            ResolutionAnimator resolution) {
         this.model = model;
         this.geometry = geometry;
         this.component = component;
@@ -50,7 +49,8 @@ public final class BoardRenderer {
         this.resolution = resolution;
     }
 
-    public void paint(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower, Point mousePoint) {
+    public void paint(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower,
+            Point mousePoint) {
         drawBoard(g2);
         if (model.getPhase() == GameModel.GamePhase.PLACING) {
             drawSelectionGuide(g2, candidates, selectedIndex, hoveredFlower, mousePoint);
@@ -74,23 +74,45 @@ public final class BoardRenderer {
         g2.drawImage(board, bounds.x, bounds.y, bounds.width, bounds.height, null);
     }
 
-    private void drawSelectionGuide(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower, Point mousePoint) {
-        if (mousePoint == null) return;
+    private void drawSelectionGuide(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower,
+            Point mousePoint) {
+        if (mousePoint == null)
+            return;
 
-        // pion fantôme au niveau du curseur
+        // pion fantôme
         int pawnSize = geometry.pawnSize();
+        Point snappedPoint = mousePoint;
+
+        if (!candidates.isEmpty()) {
+            FlowerPair selectedPair = candidates.get(selectedIndex);
+            int x1 = geometry.toScreenX(selectedPair.f1().getX());
+            int y1 = geometry.toScreenY(selectedPair.f1().getY());
+            int x2 = geometry.toScreenX(selectedPair.f2().getX());
+            int y2 = geometry.toScreenY(selectedPair.f2().getY());
+
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double lenSq = dx * dx + dy * dy;
+            double t = (lenSq == 0) ? 0 : ((mousePoint.x - x1) * dx + (mousePoint.y - y1) * dy) / lenSq;
+            t = Math.max(0.1, Math.min(0.9, t));
+
+            snappedPoint = new Point((int) (x1 + t * dx), (int) (y1 + t * dy));
+        }
+
         Composite oldComp = g2.getComposite();
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.6f));
-        GameAssets.drawFit(g2, GameAssets.pawn(model.getJoueurCourant().getIndex()), mousePoint.x, mousePoint.y - pawnSize / 8, pawnSize);
+        GameAssets.drawFit(g2, GameAssets.pawn(model.getJoueurCourant().getIndex()), mousePoint.x,
+                mousePoint.y - pawnSize / 8, pawnSize);
         g2.setComposite(oldComp);
 
-        if (candidates.isEmpty()) return;
+        if (candidates.isEmpty())
+            return;
 
         for (int i = 0; i < candidates.size(); i++) {
             FlowerPair pair = candidates.get(i);
             boolean isSelected = (i == selectedIndex);
             Color pairColor = Theme.getColor(pair.f1().getColor());
-            
+
             int x1 = geometry.toScreenX(pair.f1().getX());
             int y1 = geometry.toScreenY(pair.f1().getY());
             int x2 = geometry.toScreenX(pair.f2().getX());
@@ -101,15 +123,14 @@ public final class BoardRenderer {
                 g2.setStroke(new BasicStroke(2.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             } else {
                 g2.setColor(withAlpha(pairColor, 0.35f));
-                g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{5f}, 0));
+                g2.setStroke(
+                        new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[] { 5f }, 0));
             }
-            
+
             g2.drawLine(x1, y1, x2, y2);
-            
+
             if (isSelected) {
-                int midX = (x1 + x2) / 2;
-                int midY = (y1 + y2) / 2;
-                drawGlow(g2, midX, midY, (int)(pawnSize * 1.2), withAlpha(pairColor, 0.25f));
+                drawGlow(g2, snappedPoint.x, snappedPoint.y, (int) (pawnSize * 1.2), withAlpha(pairColor, 0.25f));
             }
         }
     }

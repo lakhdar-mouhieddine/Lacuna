@@ -10,7 +10,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 
 public class PlayerPanel extends JPanel implements ModelListener {
-    private static final int PANEL_HEIGHT = 54;
+    private static final int PANEL_WIDTH = 84;
     private static final int ICON_SIZE = 22;
     private static final int SCORE_ITEM_WIDTH = 52;
     private static final int SCORE_ITEM_HEIGHT = 34;
@@ -28,29 +28,36 @@ public class PlayerPanel extends JPanel implements ModelListener {
     private long auraStartedAt;
     private float auraPulse;
 
-    public PlayerPanel(GameModel model, Player player, boolean isTop) {
+    public PlayerPanel(GameModel model, Player player, boolean isLeft) {
         this.model = model;
         this.player = player;
 
         setOpaque(false);
-        setLayout(new FlowLayout(FlowLayout.CENTER, 14, 0));
-        setPreferredSize(new Dimension(100, PANEL_HEIGHT));
-        setBorder(BorderFactory.createEmptyBorder(isTop ? 3 : 8, 0, isTop ? 8 : 3, 0));
+        setLayout(new GridBagLayout());
+        setPreferredSize(new Dimension(PANEL_WIDTH, 100));
+        setBorder(BorderFactory.createEmptyBorder(0, isLeft ? 4 : 0, 0, isLeft ? 0 : 4));
 
         nameLabel = createPlainLabel();
         pawnLabel = createPlainLabel();
         scoreTab = new RoundedTabPanel();
-        scoreTab.setLayout(new FlowLayout(FlowLayout.CENTER, 13, 0));
+        scoreTab.setLayout(new GridLayout(0, 1, 0, 6));
         scoreTab.setOpaque(false);
 
         JPanel playerTab = new RoundedTabPanel();
-        playerTab.setLayout(new FlowLayout(FlowLayout.CENTER, 11, 0));
+        playerTab.setLayout(new GridLayout(0, 1, 0, 4));
         playerTab.setOpaque(false);
         playerTab.add(nameLabel);
         playerTab.add(pawnLabel);
 
-        add(playerTab);
-        add(scoreTab);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.insets = new Insets(8, 0, 8, 0);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        add(playerTab, gbc);
+
+        gbc.gridy = 1;
+        add(scoreTab, gbc);
 
         model.addModelListener(this);
         rafraichir();
@@ -95,8 +102,9 @@ public class PlayerPanel extends JPanel implements ModelListener {
 
     private JLabel createPlainLabel() {
         JLabel label = new JLabel();
-        label.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
         label.setForeground(Color.WHITE);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
         return label;
     }
 
@@ -156,7 +164,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
 
     private static final class RoundedTabPanel extends JPanel {
         RoundedTabPanel() {
-            setBorder(BorderFactory.createEmptyBorder(7, 18, 7, 18));
+            setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         }
 
         @Override
