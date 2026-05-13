@@ -74,3 +74,9 @@ final class SecondaryButton extends MenuButton {
         super(text, new Color(61, 60, 70), new Color(80, 79, 90));
     }
 }
+
+final class OrangeButton extends MenuButton {
+    OrangeButton(String text) {
+        super(text, new Color(208, 104, 35), new Color(235, 141, 52));
+    }
+}
