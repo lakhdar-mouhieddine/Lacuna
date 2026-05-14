@@ -19,6 +19,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
+import java.awt.image.BufferedImage;
 import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
@@ -26,6 +27,21 @@ import java.util.List;
 import lacuna.view.board.FlowerPair;
 
 public class BoardPanel extends JPanel implements ModelListener {
+    private static final Cursor BLANK_CURSOR = createBlankCursor();
+
+    private static Cursor createBlankCursor() {
+        try {
+            Toolkit toolkit = Toolkit.getDefaultToolkit();
+            Dimension dim = toolkit.getBestCursorSize(1, 1);
+            int w = Math.max(1, dim.width);
+            int h = Math.max(1, dim.height);
+            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            return toolkit.createCustomCursor(img, new Point(0, 0), "blank cursor");
+        } catch (Exception e) {
+            return Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
+        }
+    }
+
 
 
     private final GameModel model;
@@ -63,11 +79,30 @@ public class BoardPanel extends JPanel implements ModelListener {
                 mousePoint = e.getPoint();
                 updateHover(e.getX(), e.getY());
             }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                mousePoint = e.getPoint();
+                updateHover(e.getX(), e.getY());
+            }
         });
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 handleClick(e.getX(), e.getY(), e.getButton());
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                mousePoint = e.getPoint();
+                updateCursor();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                mousePoint = null;
+                updateCursor();
+                repaint();
             }
         });
         addMouseWheelListener(new MouseWheelListener() {
@@ -86,6 +121,9 @@ public class BoardPanel extends JPanel implements ModelListener {
     public void addNotify() {
         super.addNotify();
         flowerIntro.skipToEnd();
+        if (controller != null) {
+            controller.declencherCoupIASiNecessaire();
+        }
     }
 
     @Override
@@ -116,6 +154,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         if (model.getPhase() != GameModel.GamePhase.PLACING) {
             clearSelection();
         }
+        updateCursor();
         repaint();
     }
 
@@ -124,13 +163,16 @@ public class BoardPanel extends JPanel implements ModelListener {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
         GameAssets.prepare(g2);
-        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, mousePoint);
+        Point effectiveMousePoint = (isInputBlocked() || (controller != null && controller.isAiTurn())) ? null : mousePoint;
+        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, effectiveMousePoint);
         toast.paint(g2);
         g2.dispose();
     }
 
     private void updateHover(int x, int y) {
-        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING) {
+        updateCursor();
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
+                || (controller != null && controller.isAiTurn())) {
             return;
         }
 
@@ -139,10 +181,31 @@ public class BoardPanel extends JPanel implements ModelListener {
         repaint();
     }
 
+    private void updateCursor() {
+        boolean shouldHide = !(isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
+                || (controller != null && controller.isAiTurn())
+                || mousePoint == null);
+
+        if (shouldHide && mousePoint != null) {
+            if (mousePoint.x < 100 || mousePoint.x > getWidth() - 100) {
+                shouldHide = false;
+            }
+        }
+
+        Cursor c = shouldHide ? BLANK_CURSOR : Cursor.getDefaultCursor();
+        if (getCursor() != c) {
+            setCursor(c);
+            Window window = SwingUtilities.getWindowAncestor(this);
+            if (window instanceof JFrame frame) {
+                frame.getContentPane().setCursor(c);
+            }
+        }
+    }
+
     private void updateCandidatePairs(int x, int y) {
         double modelX = geometry.toModelX(x);
         double modelY = geometry.toModelY(y);
-        double threshold = 25.0 / geometry.pixelScale();
+        double threshold = (geometry.pawnSize() / 2.2) / geometry.pixelScale();
 
         List<FlowerPair> newCandidates = new ArrayList<>();
         List<Flower> flowers = model.getFleurs();
@@ -154,12 +217,9 @@ public class BoardPanel extends JPanel implements ModelListener {
                 Flower f2 = flowers.get(j);
                 if (!f2.isOnBoard() || f1.getColor() != f2.getColor()) continue;
 
-                double midX = (f1.getX() + f2.getX()) / 2.0;
-                double midY = (f1.getY() + f2.getY()) / 2.0;
 
-                double dx = midX - modelX;
-                double dy = midY - modelY;
-                if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+                java.awt.geom.Line2D.Double segment = new java.awt.geom.Line2D.Double(f1.getX(), f1.getY(), f2.getX(), f2.getY());
+                if (segment.ptSegDist(modelX, modelY) < threshold) {
                     if (model.estLigneValide(f1, f2)) {
                         newCandidates.add(new FlowerPair(f1, f2));
                     }
@@ -191,7 +251,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void handleClick(int x, int y, int button) {
-        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null) {
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null
+                || controller.isAiTurn()) {
             return;
         }
 
@@ -206,8 +267,8 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void placePawnIfValid(Flower f1, Flower f2) {
-        double modelX = (f1.getX() + f2.getX()) / 2.0;
-        double modelY = (f1.getY() + f2.getY()) / 2.0;
+        double modelX = geometry.toModelX(mousePoint.x);
+        double modelY = geometry.toModelY(mousePoint.y);
 
         if (model.estLigneValide(f1, f2)) {
             Pawn placedPawn = nextUnplacedPawn(model.getJoueurCourant());
@@ -225,9 +286,10 @@ public class BoardPanel extends JPanel implements ModelListener {
         if (controller != null) {
             controller.onPlacementAnimationFinished();
         }
-        if (model.getPhase() == GameModel.GamePhase.PLACING) {
+        if (model.getPhase() == GameModel.GamePhase.PLACING
+                && (controller == null || !controller.isAiTurn())) {
             boolean isPlayer1 = model.getJoueurCourant().getIndex() == 0;
-            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", isPlayer1);
+            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", false);
         }
     }
 
@@ -261,10 +323,18 @@ public class BoardPanel extends JPanel implements ModelListener {
         selectedPairIndex = 0;
         hoveredFlower = null;
         mousePoint = null;
+        updateCursor();
     }
 
     private boolean isInputBlocked() {
-        return wordSplash.active() || flowerIntro.blocksInput() || placement.active();
+        return wordSplash.active() || flowerIntro.blocksInput() || placement.active()
+                || (controller != null && controller.isAiThinking());
+    }
+
+    public void jouerAnimationPionIA(Pawn pawn, Flower f1, Flower f2, Runnable onFinished) {
+        clearSelection();
+        placement.start(pawn, f1, f2, onFinished);
+        repaint();
     }
 
     private Pawn nextUnplacedPawn(Player player) {

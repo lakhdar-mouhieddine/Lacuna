@@ -13,13 +13,13 @@ import java.util.List;
 
 public final class GameAssets {
     private static final BufferedImage BOARD = load("board.png");
-    private static final BufferedImage BLUE_FLOWER = load("clear_blue.png");
-    private static final BufferedImage CYAN_FLOWER = load("clear_cyan.png");
-    private static final BufferedImage GREEN_FLOWER = load("clear_green.png");
-    private static final BufferedImage ORANGE_FLOWER = load("clear_orange.png");
-    private static final BufferedImage PINK_FLOWER = load("clear_pink.png");
-    private static final BufferedImage PURPLE_FLOWER = load("clear_purple.png");
-    private static final BufferedImage RED_FLOWER = load("clear_red.png");
+    private static final BufferedImage BLUE_FLOWER = load("flowers/blue.png");
+    private static final BufferedImage CYAN_FLOWER = load("flowers/cyan.png");
+    private static final BufferedImage GREEN_FLOWER = load("flowers/green.png");
+    private static final BufferedImage ORANGE_FLOWER = load("flowers/orange.png");
+    private static final BufferedImage PINK_FLOWER = load("flowers/pink.png");
+    private static final BufferedImage PURPLE_FLOWER = load("flowers/purple.png");
+    private static final BufferedImage RED_FLOWER = load("flowers/red.png");
     private static final BufferedImage SILVER_PAWN = load("silver_pawn.png");
     private static final BufferedImage GOLD_PAWN = load("gold_pawn.png");
     private static final BufferedImage LETS_PLAY = load("lets_play.png");
@@ -72,6 +72,7 @@ public final class GameAssets {
     public static void prepare(Graphics2D g2) {
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
     }
 
     public static Rectangle coverBounds(BufferedImage image, int width, int height) {
@@ -104,10 +105,9 @@ public final class GameAssets {
 
     private static BufferedImage load(String name) {
         List<Path> candidates = List.of(
-            Path.of("assets", name),
-            Path.of("lacuna", "assets", name),
-            Path.of("..", "lacuna", "assets", name)
-        );
+                Path.of("assets", name),
+                Path.of("lacuna", "assets", name),
+                Path.of("..", "lacuna", "assets", name));
 
         for (Path path : candidates) {
             if (Files.exists(path)) {

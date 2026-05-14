@@ -10,11 +10,10 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 
 public class PlayerPanel extends JPanel implements ModelListener {
-    private static final int PANEL_HEIGHT = 54;
+    private static final int PANEL_WIDTH = 110;
     private static final int ICON_SIZE = 22;
-    private static final int SCORE_ITEM_WIDTH = 52;
+    private static final int SCORE_ITEM_WIDTH = 80;
     private static final int SCORE_ITEM_HEIGHT = 34;
-    private static final int SCORE_ICON_GAP = 6;
     private static final Color WIN_AURA = new Color(74, 218, 126);
     private static final Color LOSE_AURA = new Color(239, 80, 88);
     private static final Color TIE_AURA = new Color(174, 174, 184);
@@ -24,33 +23,44 @@ public class PlayerPanel extends JPanel implements ModelListener {
     private final JLabel nameLabel;
     private final JLabel pawnLabel;
     private final JPanel scoreTab;
+    private final java.util.Map<FlowerColor, Integer> previousScores = new java.util.EnumMap<>(FlowerColor.class);
+    private final java.util.Map<FlowerColor, Integer> bonusValues = new java.util.EnumMap<>(FlowerColor.class);
+    private Timer bonusTimer;
+    private long bonusStartedAt;
     private Timer auraTimer;
     private long auraStartedAt;
     private float auraPulse;
 
-    public PlayerPanel(GameModel model, Player player, boolean isTop) {
+    public PlayerPanel(GameModel model, Player player, boolean isLeft) {
         this.model = model;
         this.player = player;
 
         setOpaque(false);
-        setLayout(new FlowLayout(FlowLayout.CENTER, 14, 0));
-        setPreferredSize(new Dimension(100, PANEL_HEIGHT));
-        setBorder(BorderFactory.createEmptyBorder(isTop ? 3 : 8, 0, isTop ? 8 : 3, 0));
+        setLayout(new GridBagLayout());
+        setPreferredSize(new Dimension(PANEL_WIDTH, 100));
+        setBorder(BorderFactory.createEmptyBorder(0, isLeft ? 4 : 0, 0, isLeft ? 0 : 4));
 
         nameLabel = createPlainLabel();
         pawnLabel = createPlainLabel();
         scoreTab = new RoundedTabPanel();
-        scoreTab.setLayout(new FlowLayout(FlowLayout.CENTER, 13, 0));
+        scoreTab.setLayout(new GridLayout(0, 1, 0, 6));
         scoreTab.setOpaque(false);
 
         JPanel playerTab = new RoundedTabPanel();
-        playerTab.setLayout(new FlowLayout(FlowLayout.CENTER, 11, 0));
+        playerTab.setLayout(new GridLayout(0, 1, 0, 4));
         playerTab.setOpaque(false);
         playerTab.add(nameLabel);
         playerTab.add(pawnLabel);
 
-        add(playerTab);
-        add(scoreTab);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.insets = new Insets(8, 0, 8, 0);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        add(playerTab, gbc);
+
+        gbc.gridy = 1;
+        add(scoreTab, gbc);
 
         model.addModelListener(this);
         rafraichir();
@@ -74,6 +84,16 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private void rafraichir() {
+        for (FlowerColor color : FlowerColor.values()) {
+            int current = player.getScoreForColor(color);
+            int prev = previousScores.getOrDefault(color, 0);
+            if (current > prev) {
+                bonusValues.put(color, current - prev);
+                startBonusTimer();
+            }
+            previousScores.put(color, current);
+        }
+
         int remainingPawns = GameModel.PAWNS_PER_PLAYER - player.getPawnsPlaced();
 
         nameLabel.setText(player.getName());
@@ -95,8 +115,9 @@ public class PlayerPanel extends JPanel implements ModelListener {
 
     private JLabel createPlainLabel() {
         JLabel label = new JLabel();
-        label.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
         label.setForeground(Color.WHITE);
+        label.setHorizontalAlignment(SwingConstants.CENTER);
         return label;
     }
 
@@ -107,7 +128,8 @@ public class PlayerPanel extends JPanel implements ModelListener {
             String.valueOf(playerScore),
             GameAssets.flower(color),
             scoreAura(playerScore, opponentScore),
-            playerScore
+            playerScore,
+            bonusValues.getOrDefault(color, 0)
         );
     }
 
@@ -150,13 +172,28 @@ public class PlayerPanel extends JPanel implements ModelListener {
         }
     }
 
+    private void startBonusTimer() {
+        bonusStartedAt = System.currentTimeMillis();
+        if (bonusTimer == null) {
+            bonusTimer = new Timer(50, e -> {
+                if (System.currentTimeMillis() - bonusStartedAt > 2000) {
+                    bonusValues.clear();
+                    bonusTimer.stop();
+                    bonusTimer = null;
+                }
+                scoreTab.repaint();
+            });
+            bonusTimer.start();
+        }
+    }
+
     private boolean shouldShowAura() {
         return model.getPhase() != GameModel.GamePhase.PLACING;
     }
 
     private static final class RoundedTabPanel extends JPanel {
         RoundedTabPanel() {
-            setBorder(BorderFactory.createEmptyBorder(7, 18, 7, 18));
+            setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         }
 
         @Override
@@ -173,21 +210,22 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private final class ScoreItem extends JComponent {
-        private static final int MINI_FLOWER_SIZE = 10;
-        private static final int MINI_GAP = 1;
-        private static final int MINI_COLS = 3;
-        private static final int MINI_ROWS = 2;
+        private static final int STACK_SIZE = 22;
+        private static final int STACK_OFFSET = 8;
+        private static final int MAX_VISIBLE = 4;
 
         private final String score;
         private final BufferedImage image;
         private final Color aura;
         private final int count;
+        private final int bonus;
 
-        ScoreItem(String score, BufferedImage image, Color aura, int count) {
+        ScoreItem(String score, BufferedImage image, Color aura, int count, int bonus) {
             this.score = score;
             this.image = image;
             this.aura = aura;
             this.count = count;
+            this.bonus = bonus;
             setOpaque(false);
             setFont(new Font("Segoe UI", Font.BOLD, 14));
             setForeground(Color.WHITE);
@@ -206,40 +244,39 @@ public class PlayerPanel extends JPanel implements ModelListener {
                 drawAura(g2, auraCenterX, centerY);
             }
 
-            // Draw mini flower grid filling the component area
             if (count > 0 && image != null) {
-                int gridW = Math.min(count, MINI_COLS) * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
-                int rows = Math.min(MINI_ROWS, (count + MINI_COLS - 1) / MINI_COLS);
-                int gridH = rows * (MINI_FLOWER_SIZE + MINI_GAP) - MINI_GAP;
-                int gridStartX = (getWidth() - gridW) / 2;
-                int gridStartY = (getHeight() - gridH) / 2;
-                int maxDisplay = MINI_COLS * MINI_ROWS;
-                int displayCount = Math.min(count, maxDisplay);
+                int displayCount = Math.min(count, MAX_VISIBLE);
+                int totalWidth = STACK_SIZE + (displayCount - 1) * STACK_OFFSET;
+                int startX = (getWidth() - totalWidth) / 2 + STACK_SIZE / 2;
+                
+                if (count > MAX_VISIBLE) {
+                    startX -= 10;
+                }
 
                 for (int i = 0; i < displayCount; i++) {
-                    int col = i % MINI_COLS;
-                    int row = i / MINI_COLS;
-                    int fx = gridStartX + col * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
-                    int fy = gridStartY + row * (MINI_FLOWER_SIZE + MINI_GAP) + MINI_FLOWER_SIZE / 2;
-                    GameAssets.drawFit(g2, image, fx, fy, MINI_FLOWER_SIZE);
+                    int fx = startX + i * STACK_OFFSET;
+                    GameAssets.drawFit(g2, image, fx, centerY, STACK_SIZE);
                 }
 
-                // If more flowers than grid can show, draw count text
-                if (count > maxDisplay) {
-                    g2.setFont(getFont());
+                if (count > MAX_VISIBLE) {
+                    g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
                     g2.setColor(getForeground());
-                    String extra = "+" + (count - maxDisplay);
+                    String extra = "+" + (count - MAX_VISIBLE);
                     FontMetrics fm = g2.getFontMetrics();
-                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 2,
+                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 1,
                             centerY + fm.getAscent() / 2 - 1);
                 }
-            } else {
-                // No flowers: just draw the flower icon faded
-                if (image != null) {
-                    java.awt.Composite old = g2.getComposite();
-                    g2.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.3f));
-                    GameAssets.drawFit(g2, image, getWidth() / 2, centerY, ICON_SIZE);
-                    g2.setComposite(old);
+            }
+
+            if (bonus > 0) {
+                long elapsed = System.currentTimeMillis() - bonusStartedAt;
+                if (elapsed < 2000) {
+                    float bAlpha = Math.max(0, 1f - elapsed / 2000f);
+                    float bOffset = elapsed / 50f;
+                    g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
+                    g2.setColor(new Color(100, 255, 150, Math.round(bAlpha * 255)));
+                    String msg = "+" + bonus;
+                    g2.drawString(msg, getWidth() - 20, centerY - Math.round(bOffset));
                 }
             }
 

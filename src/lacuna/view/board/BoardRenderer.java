@@ -19,10 +19,8 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 
 public final class BoardRenderer {
-    private static final BasicStroke RESOLUTION_LINE_STROKE =
-        new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-    private static final BasicStroke RESOLUTION_PULSE_STROKE =
-        new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+    private static final BasicStroke RESOLUTION_LINE_STROKE = new BasicStroke(1.8f, BasicStroke.CAP_ROUND,
+            BasicStroke.JOIN_ROUND);
 
     private final GameModel model;
     private final BoardGeometry geometry;
@@ -31,16 +29,17 @@ public final class BoardRenderer {
     private final FlowerIntroAnimator flowerIntro;
     private final PlacementAnimator placement;
     private final ResolutionAnimator resolution;
+    private BufferedImage cachedVoronoi;
+    private ResolutionAnimator.ResolutionPhase lastPhase;
 
     public BoardRenderer(
-        GameModel model,
-        BoardGeometry geometry,
-        JComponent component,
-        WordSplashAnimator wordSplash,
-        FlowerIntroAnimator flowerIntro,
-        PlacementAnimator placement,
-        ResolutionAnimator resolution
-    ) {
+            GameModel model,
+            BoardGeometry geometry,
+            JComponent component,
+            WordSplashAnimator wordSplash,
+            FlowerIntroAnimator flowerIntro,
+            PlacementAnimator placement,
+            ResolutionAnimator resolution) {
         this.model = model;
         this.geometry = geometry;
         this.component = component;
@@ -50,14 +49,15 @@ public final class BoardRenderer {
         this.resolution = resolution;
     }
 
-    public void paint(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower, Point mousePoint) {
+    public void paint(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower,
+            Point mousePoint) {
         drawBoard(g2);
         if (model.getPhase() == GameModel.GamePhase.PLACING) {
             drawSelectionGuide(g2, candidates, selectedIndex, hoveredFlower, mousePoint);
         }
         drawElements(g2, null, hoveredFlower);
         drawPlacementFlowerAnimation(g2);
-        drawResolutionEffect(g2);
+        drawResolutionPhase(g2);
         wordSplash.paint(g2);
     }
 
@@ -74,23 +74,45 @@ public final class BoardRenderer {
         g2.drawImage(board, bounds.x, bounds.y, bounds.width, bounds.height, null);
     }
 
-    private void drawSelectionGuide(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower, Point mousePoint) {
-        if (mousePoint == null) return;
+    private void drawSelectionGuide(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower,
+            Point mousePoint) {
+        if (mousePoint == null)
+            return;
 
-        // pion fantôme au niveau du curseur
+        // pion fantôme
         int pawnSize = geometry.pawnSize();
+        Point snappedPoint = mousePoint;
+
+        if (!candidates.isEmpty()) {
+            FlowerPair selectedPair = candidates.get(selectedIndex);
+            int x1 = geometry.toScreenX(selectedPair.f1().getX());
+            int y1 = geometry.toScreenY(selectedPair.f1().getY());
+            int x2 = geometry.toScreenX(selectedPair.f2().getX());
+            int y2 = geometry.toScreenY(selectedPair.f2().getY());
+
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            double lenSq = dx * dx + dy * dy;
+            double t = (lenSq == 0) ? 0 : ((mousePoint.x - x1) * dx + (mousePoint.y - y1) * dy) / lenSq;
+            t = Math.max(0.1, Math.min(0.9, t));
+
+            snappedPoint = new Point((int) (x1 + t * dx), (int) (y1 + t * dy));
+        }
+
         Composite oldComp = g2.getComposite();
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.6f));
-        GameAssets.drawFit(g2, GameAssets.pawn(model.getJoueurCourant().getIndex()), mousePoint.x, mousePoint.y - pawnSize / 8, pawnSize);
+        GameAssets.drawFit(g2, GameAssets.pawn(model.getJoueurCourant().getIndex()), mousePoint.x,
+                mousePoint.y - pawnSize / 8, pawnSize);
         g2.setComposite(oldComp);
 
-        if (candidates.isEmpty()) return;
+        if (candidates.isEmpty())
+            return;
 
         for (int i = 0; i < candidates.size(); i++) {
             FlowerPair pair = candidates.get(i);
             boolean isSelected = (i == selectedIndex);
             Color pairColor = Theme.getColor(pair.f1().getColor());
-            
+
             int x1 = geometry.toScreenX(pair.f1().getX());
             int y1 = geometry.toScreenY(pair.f1().getY());
             int x2 = geometry.toScreenX(pair.f2().getX());
@@ -101,16 +123,12 @@ public final class BoardRenderer {
                 g2.setStroke(new BasicStroke(2.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             } else {
                 g2.setColor(withAlpha(pairColor, 0.35f));
-                g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{5f}, 0));
+                g2.setStroke(
+                        new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[] { 5f }, 0));
             }
-            
+
             g2.drawLine(x1, y1, x2, y2);
-            
-            if (isSelected) {
-                int midX = (x1 + x2) / 2;
-                int midY = (y1 + y2) / 2;
-                drawGlow(g2, midX, midY, (int)(pawnSize * 1.2), withAlpha(pairColor, 0.25f));
-            }
+
         }
     }
 
@@ -239,34 +257,47 @@ public final class BoardRenderer {
 
         Composite oldComposite = g2.getComposite();
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-        drawGlow(g2, x, y, Math.round(size * 1.45f), new Color(255, 255, 255, Math.round(34 * alpha)));
         GameAssets.drawFit(g2, GameAssets.flower(flower.getColor()), x, y, size);
         g2.setComposite(oldComposite);
     }
 
-    private void drawResolutionEffect(Graphics2D g2) {
-        ResolutionAnimator.ResolutionStep step = resolution.currentStep();
-        if (wordSplash.active() || model.getPhase() != GameModel.GamePhase.RESOLVING || step == null) {
+    
+    // Algorithme: Diagramme de Voronoi (Nearest-Neighbor)
+    private void drawResolutionPhase(Graphics2D g2) {
+        ResolutionAnimator.ResolutionPhase phase = resolution.currentPhase();
+        if (wordSplash.active() || model.getPhase() != GameModel.GamePhase.RESOLVING || phase == null) {
+            cachedVoronoi = null;
+            lastPhase = null;
             return;
         }
 
         float progress = resolution.progress();
-        Color color = step.color();
-        float lineFade = progress < 0.78f ? 1f : Math.max(0f, (1f - progress) / 0.22f);
+        float vanishProgress = resolution.vanishProgress();
+        Color playerColor = phase.color();
+
+        if (phase != lastPhase || cachedVoronoi == null) {
+            lastPhase = phase;
+            updateVoronoiCache(phase);
+        }
+
+        if (cachedVoronoi != null) {
+            float alpha = 0.18f * (progress < 0.2f ? progress / 0.2f : (progress < 0.8f ? 1f : (1f - progress) / 0.2f));
+            Composite old = g2.getComposite();
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+            g2.drawImage(cachedVoronoi, 0, 0, component.getWidth(), component.getHeight(), null);
+            g2.setComposite(old);
+        }
+
         g2.setStroke(RESOLUTION_LINE_STROKE);
-        g2.setColor(withAlpha(color, 0.46f * lineFade));
-        g2.drawLine(step.pawnX(), step.pawnY(), step.flowerX(), step.flowerY());
+        float lineFade = progress < 0.82f ? 1f : Math.max(0f, (1f - progress) / 0.18f);
 
-        float pulseProgress = Math.min(1f, progress / 0.72f);
-        int flowerSize = geometry.flowerSize();
-        int radius = flowerSize / 2 + Math.round(flowerSize * 0.65f * pulseProgress);
-        float pulseFade = Math.max(0f, 1f - progress * 0.55f);
-        g2.setStroke(RESOLUTION_PULSE_STROKE);
-        g2.setColor(withAlpha(color, 0.78f * pulseFade));
-        g2.drawOval(step.flowerX() - radius, step.flowerY() - radius, radius * 2, radius * 2);
+        for (ResolutionAnimator.ResolutionStep step : phase.steps()) {
+            g2.setColor(withAlpha(playerColor, 0.32f * lineFade));
+            g2.drawLine(step.pawnX(), step.pawnY(), step.flowerX(), step.flowerY());
 
-        if (step.captured()) {
-            drawFadingFlower(g2, step, resolution.vanishProgress());
+            if (phase.isCaptured()) {
+                drawFadingFlower(g2, step, vanishProgress);
+            }
         }
     }
 
@@ -278,6 +309,41 @@ public final class BoardRenderer {
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
         GameAssets.drawFit(g2, GameAssets.flower(step.flower().getColor()), step.flowerX(), step.flowerY(), size);
         g2.setComposite(oldComposite);
+    }
+
+    private void updateVoronoiCache(ResolutionAnimator.ResolutionPhase phase) {
+        int res = 4; 
+        int w = component.getWidth() / res;
+        int h = component.getHeight() / res;
+        cachedVoronoi = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+
+        List<Pawn> allPawns = new java.util.ArrayList<>();
+        for (Player p : model.getJoueurs()) {
+            for (Pawn pw : p.getPawns()) if (pw.isPlaced()) allPawns.add(pw);
+        }
+
+        if (allPawns.isEmpty()) return;
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                double mx = geometry.toModelX(x * res);
+                double my = geometry.toModelY(y * res);
+                Pawn closest = null;
+                double minDist = Double.MAX_VALUE;
+                for (Pawn p : allPawns) {
+                    double dx = p.getX() - mx;
+                    double dy = p.getY() - my;
+                    double d = dx * dx + dy * dy; // Distance au carré pour éviter Math.sqrt
+                    if (d < minDist) {
+                        minDist = d;
+                        closest = p;
+                    }
+                }
+                if (closest != null && closest.getOwner() == phase.player()) {
+                    cachedVoronoi.setRGB(x, y, phase.color().getRGB());
+                }
+            }
+        }
     }
 
     private void drawGlow(Graphics2D g2, int x, int y, int size, Color color) {

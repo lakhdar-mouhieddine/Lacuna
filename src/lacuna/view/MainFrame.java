@@ -14,6 +14,9 @@ public class MainFrame extends JFrame {
     private PlayerPanel panelTop;
     private PlayerPanel panelBottom;
     private GameController controleur;
+    private String lastNom1;
+    private String lastNom2;
+    private int lastAiPlayerIndex;
 
     public MainFrame() {
         super("Lacuna");
@@ -27,7 +30,7 @@ public class MainFrame extends JFrame {
     }
 
     private void afficherMenu() {
-        MainMenuPanel menu = new MainMenuPanel(this::demarrerPartieLocale);
+        MainMenuPanel menu = new MainMenuPanel(this::demarrerPartieLocale, this::demarrerPartieAvecIA);
 
         setContentPane(menu);
         revalidate();
@@ -35,10 +38,17 @@ public class MainFrame extends JFrame {
     }
 
     private void demarrerPartieLocale(String nom1, String nom2) {
-        construireInterface(nom1, nom2);
+        construireInterface(nom1, nom2, -1);
     }
 
-    private void construireInterface(String nom1, String nom2) {
+    private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
+        construireInterface(nomJoueur, "IA (Facile)", 1);
+    }
+
+    private void construireInterface(String nom1, String nom2, int aiPlayerIndex) {
+        this.lastNom1 = nom1;
+        this.lastNom2 = nom2;
+        this.lastAiPlayerIndex = aiPlayerIndex;
         GameModel modele = new GameModel(nom1, nom2);
 
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
@@ -46,15 +56,15 @@ public class MainFrame extends JFrame {
         plateau = new BoardPanel(modele);
         TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
-        controleur = new GameController(modele, this);
+        controleur = new GameController(modele, this, plateau, aiPlayerIndex);
         plateau.setController(controleur);
 
         JPanel hud = new JPanel(new BorderLayout());
         hud.setOpaque(false);
         hud.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         
-        hud.add(panelTop, BorderLayout.NORTH);
-        hud.add(panelBottom, BorderLayout.SOUTH);
+        hud.add(panelTop, BorderLayout.WEST);
+        hud.add(panelBottom, BorderLayout.EAST);
 
         JLayeredPane gameRoot = new JLayeredPane() {
             @Override
@@ -65,7 +75,7 @@ public class MainFrame extends JFrame {
                 hud.setBounds(0, 0, size.width, size.height);
             }
         };
-        gameRoot.setBackground(new Color(20, 22, 35));
+        gameRoot.setBackground(new Color(15, 16, 22));
         gameRoot.setOpaque(true);
         gameRoot.add(plateau, JLayeredPane.DEFAULT_LAYER);
         gameRoot.add(turnGlow, TURN_GLOW_LAYER);
@@ -77,12 +87,11 @@ public class MainFrame extends JFrame {
     }
 
     public void relancerPartie() {
-        String[] noms = PlayerNamesDialog.show(this);
-        if (noms == null) {
-            retourMenuPrincipal();
-            return;
+        if (lastNom1 != null) {
+            construireInterface(lastNom1, lastNom2, lastAiPlayerIndex);
+        } else {
+            afficherMenu();
         }
-        construireInterface(noms[0], noms[1]);
     }
 
     public void jouerAnimationResolution(Runnable apresAnimation) {

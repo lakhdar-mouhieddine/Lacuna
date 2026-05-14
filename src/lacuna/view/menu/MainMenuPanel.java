@@ -16,12 +16,14 @@ public class MainMenuPanel extends JPanel {
     private final BufferedImage pinkFlower = MenuAssets.load("main_men_pink.png");
 
     private final BiConsumer<String, String> onLocalPlay;
+    private final BiConsumer<String, String> onAiPlay;
     private final SegmentedChoice modeSelect;
     private final JPanel modeFields;
     private final PrimaryButton playButton;
 
-    public MainMenuPanel(BiConsumer<String, String> onLocalPlay) {
+    public MainMenuPanel(BiConsumer<String, String> onLocalPlay, BiConsumer<String, String> onAiPlay) {
         this.onLocalPlay = onLocalPlay;
+        this.onAiPlay = onAiPlay;
         this.modeSelect = new SegmentedChoice(MODE_NORMAL, MODE_AI, MODE_ONLINE);
         this.modeFields = MenuTheme.verticalPanel();
         this.playButton = new PrimaryButton("Jouer Lacuna");
@@ -111,14 +113,27 @@ public class MainMenuPanel extends JPanel {
     private void showAiFields() {
         modeFields.removeAll();
 
+        JTextField playerName = MenuTheme.textField("Votre nom");
         SegmentedChoice levels = new SegmentedChoice("Facile", "Moyen", "Difficile");
-        levels.setEnabled(false);
 
-        addLabeledField("Niveau de l'AI", levels);
-        modeFields.add(Box.createVerticalStrut(12));
-        modeFields.add(MenuTheme.label("Mode AI indisponible pour le moment.", 13, MenuTheme.MUTED_TEXT));
+        addLabeledField("Votre nom", playerName);
+        addLabeledField("Niveau de l'IA", levels);
+        modeFields.add(Box.createVerticalStrut(8));
+        modeFields.add(MenuTheme.label("Moyen et Difficile arrivent bientot.", 12, MenuTheme.MUTED_TEXT));
 
-        playButton.prepare("Indisponible", false, true);
+        playButton.prepare("Jouer vs IA", true, true);
+        playButton.addActionListener((ActionEvent e) -> {
+            String nom = valueOrDefault(playerName.getText(), "Joueur");
+            String niveau = levels.selectedValue();
+            if ("Facile".equals(niveau)) {
+                onAiPlay.accept(nom, niveau);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Seul le niveau Facile est disponible pour le moment.",
+                    "Niveau indisponible", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+
         refreshFields();
     }
 
