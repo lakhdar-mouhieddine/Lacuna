@@ -2,10 +2,13 @@ package lacuna.view;
 
 import lacuna.model.GameModel;
 import lacuna.controller.GameController;
+import lacuna.network.OnlineSessionConnection;
 import lacuna.view.menu.MainMenuPanel;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 public class MainFrame extends JFrame {
     private static final Integer TURN_GLOW_LAYER = JLayeredPane.DEFAULT_LAYER + 50;
@@ -17,11 +20,18 @@ public class MainFrame extends JFrame {
     private String lastNom1;
     private String lastNom2;
     private int lastAiPlayerIndex;
+    private OnlineSessionConnection onlineSessionConnection;
 
     public MainFrame() {
         super("Lacuna");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(920, 620));
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                fermerSessionEnLigneActuelle();
+            }
+        });
 
         afficherMenu();
         pack();
@@ -30,7 +40,11 @@ public class MainFrame extends JFrame {
     }
 
     private void afficherMenu() {
-        MainMenuPanel menu = new MainMenuPanel(this::demarrerPartieLocale, this::demarrerPartieAvecIA);
+        MainMenuPanel menu = new MainMenuPanel(
+                this::demarrerPartieLocale,
+                this::demarrerPartieAvecIA,
+                this::afficherSessionRejointe,
+                this::afficherSessionRejointe);
 
         setContentPane(menu);
         revalidate();
@@ -38,11 +52,52 @@ public class MainFrame extends JFrame {
     }
 
     private void demarrerPartieLocale(String nom1, String nom2) {
+        fermerSessionEnLigneActuelle();
         construireInterface(nom1, nom2, -1);
     }
 
     private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
+        fermerSessionEnLigneActuelle();
         construireInterface(nomJoueur, "IA (Facile)", 1);
+    }
+
+    private void afficherSessionRejointe(OnlineSessionConnection sessionConnection) {
+        afficherSessionConnectee(sessionConnection, "Session rejointe avec succes");
+    }
+
+    private void afficherSessionConnectee(OnlineSessionConnection sessionConnection, String message) {
+        if (onlineSessionConnection != sessionConnection) {
+            fermerSessionEnLigneActuelle();
+            onlineSessionConnection = sessionConnection;
+        }
+
+        JPanel placeholder = createCenteredPanel();
+        placeholder.add(createOnlineLabel(message, 28, new Color(245, 244, 248)));
+
+        setContentPane(placeholder);
+        revalidate();
+        repaint();
+    }
+
+    private void fermerSessionEnLigneActuelle() {
+        if (onlineSessionConnection != null) {
+            onlineSessionConnection.close();
+            onlineSessionConnection = null;
+        }
+    }
+
+    private JPanel createCenteredPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(new Color(24, 23, 29));
+        return panel;
+    }
+
+    private JLabel createOnlineLabel(String text, int size, Color color) {
+        JLabel label = new JLabel(text);
+        label.setForeground(color);
+        label.setFont(new Font("Segoe UI", Font.BOLD, size));
+        label.setAlignmentX(Component.CENTER_ALIGNMENT);
+        return label;
     }
 
     private void construireInterface(String nom1, String nom2, int aiPlayerIndex) {
