@@ -191,19 +191,12 @@ public class MainMenuPanel extends JPanel {
         addLabeledField("Votre nom", playerName);
         addLabeledField("Niveau de l'IA", levels);
         modeFields.add(Box.createVerticalStrut(8));
-        modeFields.add(MenuTheme.label("Moyen et Difficile arrivent bientot.", 12, MenuTheme.MUTED_TEXT));
 
         playButton.prepare("Jouer contre l'IA", true, true);
         playButton.addActionListener((ActionEvent e) -> {
             String nom = valueOrDefault(playerName.getText(), "Joueur");
             String niveau = levels.selectedValue();
-            if ("Facile".equals(niveau)) {
-                onAiPlay.accept(nom, niveau);
-            } else {
-                JOptionPane.showMessageDialog(this,
-                    "Seul le niveau Facile est disponible pour le moment.",
-                    "Niveau indisponible", JOptionPane.INFORMATION_MESSAGE);
-            }
+            onAiPlay.accept(nom, niveau);
         });
 
         refreshFields();

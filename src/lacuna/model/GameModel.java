@@ -27,6 +27,10 @@ public class GameModel {
     }
 
     public GameModel(String name1, String name2) {
+        this(name1, name2, new Random().nextLong());
+    }
+
+    public GameModel(String name1, String name2, long seed) {
         flowers = new ArrayList<>(NUM_FLOWERS);
         players = new Player[]{
             new Player(name1, 0),
@@ -35,7 +39,7 @@ public class GameModel {
         currentPlayerIndex = 0;
         phase = GamePhase.PLACING;
 
-        genererFleursTapis();
+        genererFleursTapis(seed);
         creerPions();
     }
 
@@ -47,8 +51,8 @@ public class GameModel {
         }
     }
 
-    private void genererFleursTapis() {
-        Random rng = new Random();
+    private void genererFleursTapis(long seed) {
+        Random rng = new Random(seed);
         List<FlowerColor> poolCouleurs = new ArrayList<>(NUM_FLOWERS);
         for (FlowerColor c : FlowerColor.values()) {
             for (int i = 0; i < FLOWERS_PER_COLOR; i++) poolCouleurs.add(c);
