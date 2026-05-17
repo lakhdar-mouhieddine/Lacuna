@@ -60,6 +60,8 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     private List<FlowerPair> candidatePairs = new ArrayList<>();
     private int selectedPairIndex = 0;
+    private boolean showingAiIntention = false;
+    private Point aiIntentionPoint = null;
 
     public BoardPanel(GameModel model) {
         this.model = model;
@@ -163,7 +165,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
         GameAssets.prepare(g2);
-        Point effectiveMousePoint = (isInputBlocked() || (controller != null && controller.isAiTurn())) ? null : mousePoint;
+        Point effectiveMousePoint = showingAiIntention ? aiIntentionPoint : ((isInputBlocked() || (controller != null && controller.isAiTurn())) ? null : mousePoint);
         renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, effectiveMousePoint);
         toast.paint(g2);
         g2.dispose();
@@ -329,6 +331,25 @@ public class BoardPanel extends JPanel implements ModelListener {
     private boolean isInputBlocked() {
         return wordSplash.active() || flowerIntro.blocksInput() || placement.active()
                 || (controller != null && controller.isAiThinking());
+    }
+
+    public void montrerIntentionIA(Flower f1, Flower f2, double pawnX, double pawnY, Runnable onFinished) {
+        candidatePairs.clear();
+        candidatePairs.add(new FlowerPair(f1, f2));
+        selectedPairIndex = 0;
+        
+        aiIntentionPoint = new Point(geometry.toScreenX(pawnX), geometry.toScreenY(pawnY));
+        showingAiIntention = true;
+        updateCursor();
+        repaint();
+
+        Timer timer = new Timer(800, e -> {
+            showingAiIntention = false;
+            aiIntentionPoint = null;
+            onFinished.run();
+        });
+        timer.setRepeats(false);
+        timer.start();
     }
 
     public void jouerAnimationPionIA(Pawn pawn, Flower f1, Flower f2, Runnable onFinished) {

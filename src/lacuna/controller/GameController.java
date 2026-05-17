@@ -107,11 +107,15 @@ public class GameController {
         for (Pawn pw : model.getJoueurCourant().getPawns()) {
             if (!pw.isPlaced()) { pionLibre = pw; break; }
         }
+        
+        final Pawn finalPionLibre = pionLibre;
 
-        boolean success = model.placerPionEtCapturer(f1, f2, move.pawnX, move.pawnY);
-        if (success && pionLibre != null) {
-            boardPanel.jouerAnimationPionIA(pionLibre, f1, f2, this::onPlacementAnimationFinished);
-        }
+        boardPanel.montrerIntentionIA(f1, f2, move.pawnX, move.pawnY, () -> {
+            boolean success = model.placerPionEtCapturer(f1, f2, move.pawnX, move.pawnY);
+            if (success && finalPionLibre != null) {
+                boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
+            }
+        });
     }
 
     private void afficherResultat() {
