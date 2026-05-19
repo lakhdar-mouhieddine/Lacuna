@@ -62,6 +62,7 @@ public class BoardPanel extends JPanel implements ModelListener {
     private int selectedPairIndex = 0;
     private boolean showingAiIntention = false;
     private Point aiIntentionPoint = null;
+    private FlowerPair lastPhantomPair = null;
 
     public BoardPanel(GameModel model) {
         this.model = model;
@@ -166,7 +167,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         Graphics2D g2 = (Graphics2D) g.create();
         GameAssets.prepare(g2);
         Point effectiveMousePoint = showingAiIntention ? aiIntentionPoint : ((isInputBlocked() || (controller != null && controller.isAiTurn())) ? null : mousePoint);
-        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, effectiveMousePoint);
+        renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, effectiveMousePoint, lastPhantomPair);
         toast.paint(g2);
         g2.dispose();
     }
@@ -230,8 +231,19 @@ public class BoardPanel extends JPanel implements ModelListener {
         }
 
         if (!areCandidateListsEqual(candidatePairs, newCandidates)) {
+            FlowerPair currentSelected = candidatePairs.isEmpty() ? null : candidatePairs.get(selectedPairIndex);
             candidatePairs = newCandidates;
             selectedPairIndex = 0;
+            
+            if (currentSelected != null) {
+                for (int i = 0; i < candidatePairs.size(); i++) {
+                    FlowerPair p = candidatePairs.get(i);
+                    if (p.f1() == currentSelected.f1() && p.f2() == currentSelected.f2()) {
+                        selectedPairIndex = i;
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -272,10 +284,19 @@ public class BoardPanel extends JPanel implements ModelListener {
         double modelX = geometry.toModelX(mousePoint.x);
         double modelY = geometry.toModelY(mousePoint.y);
 
+        double minDistance = (geometry.flowerSize() / 2.0 + geometry.pawnSize() / 2.0) / geometry.pixelScale() * 0.85;
+        for (Flower flower : model.getFleurs()) {
+            if (flower.isOnBoard() && flower.distanceTo(modelX, modelY) < minDistance) {
+                toast.show("Le pion est trop pres d'une fleur.");
+                return;
+            }
+        }
+
         if (model.estLigneValide(f1, f2)) {
             Pawn placedPawn = nextUnplacedPawn(model.getJoueurCourant());
             boolean success = controller.onPlacementValid(f1, f2, modelX, modelY);
             if (success && placedPawn != null) {
+                lastPhantomPair = null;
                 placement.start(placedPawn, f1, f2, this::finishPlacementAnimation);
                 candidatePairs.clear();
             }
@@ -354,6 +375,7 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     public void jouerAnimationPionIA(Pawn pawn, Flower f1, Flower f2, Runnable onFinished) {
         clearSelection();
+        lastPhantomPair = new FlowerPair(f1, f2);
         placement.start(pawn, f1, f2, onFinished);
         repaint();
     }
