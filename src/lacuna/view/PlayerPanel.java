@@ -115,7 +115,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
 
     private JLabel createPlainLabel() {
         JLabel label = new JLabel();
-        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        label.setFont(new Font("Segoe UI", Font.BOLD, 16));
         label.setForeground(Color.WHITE);
         label.setHorizontalAlignment(SwingConstants.CENTER);
         return label;
@@ -210,10 +210,6 @@ public class PlayerPanel extends JPanel implements ModelListener {
     }
 
     private final class ScoreItem extends JComponent {
-        private static final int STACK_SIZE = 22;
-        private static final int STACK_OFFSET = 8;
-        private static final int MAX_VISIBLE = 4;
-
         private final String score;
         private final BufferedImage image;
         private final Color aura;
@@ -227,7 +223,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
             this.count = count;
             this.bonus = bonus;
             setOpaque(false);
-            setFont(new Font("Segoe UI", Font.BOLD, 14));
+            setFont(new Font("Segoe UI", Font.BOLD, 16));
             setForeground(Color.WHITE);
             setPreferredSize(new Dimension(SCORE_ITEM_WIDTH, SCORE_ITEM_HEIGHT));
         }
@@ -237,35 +233,24 @@ public class PlayerPanel extends JPanel implements ModelListener {
             Graphics2D g2 = (Graphics2D) g.create();
             GameAssets.prepare(g2);
 
+            FontMetrics metrics = g2.getFontMetrics(getFont());
+            int iconX = getWidth() - ICON_SIZE - 7;
+            int iconCenterX = iconX + ICON_SIZE / 2;
             int centerY = getHeight() / 2;
+            int textWidth = metrics.stringWidth(score);
+            int textX = Math.max(0, iconX - 8 - textWidth);
+            int textY = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
 
             if (shouldShowAura() && image != null) {
-                int auraCenterX = getWidth() / 2;
-                drawAura(g2, auraCenterX, centerY);
+                drawAura(g2, iconCenterX, centerY);
             }
 
-            if (count > 0 && image != null) {
-                int displayCount = Math.min(count, MAX_VISIBLE);
-                int totalWidth = STACK_SIZE + (displayCount - 1) * STACK_OFFSET;
-                int startX = (getWidth() - totalWidth) / 2 + STACK_SIZE / 2;
-                
-                if (count > MAX_VISIBLE) {
-                    startX -= 10;
-                }
-
-                for (int i = 0; i < displayCount; i++) {
-                    int fx = startX + i * STACK_OFFSET;
-                    GameAssets.drawFit(g2, image, fx, centerY, STACK_SIZE);
-                }
-
-                if (count > MAX_VISIBLE) {
-                    g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
-                    g2.setColor(getForeground());
-                    String extra = "+" + (count - MAX_VISIBLE);
-                    FontMetrics fm = g2.getFontMetrics();
-                    g2.drawString(extra, getWidth() - fm.stringWidth(extra) - 1,
-                            centerY + fm.getAscent() / 2 - 1);
-                }
+            g2.setFont(getFont());
+            g2.setColor(getForeground());
+            g2.drawString(score, textX, textY);
+            
+            if (image != null) {
+                GameAssets.drawFit(g2, image, iconCenterX, centerY, ICON_SIZE);
             }
 
             if (bonus > 0) {
@@ -276,7 +261,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
                     g2.setFont(getFont().deriveFont(Font.BOLD, 12f));
                     g2.setColor(new Color(100, 255, 150, Math.round(bAlpha * 255)));
                     String msg = "+" + bonus;
-                    g2.drawString(msg, getWidth() - 20, centerY - Math.round(bOffset));
+                    g2.drawString(msg, iconCenterX + ICON_SIZE / 2 + 2, centerY - Math.round(bOffset));
                 }
             }
 

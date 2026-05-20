@@ -44,6 +44,10 @@ public class BoardPanel extends JPanel implements ModelListener {
 
 
 
+    private static final int LETS_PLAY_SPLASH_MS = 1150;
+    private static final int HOLD_UP_SPLASH_MS = 1200;
+    private static final int GAME_OVER_SPLASH_MS = 950;
+
     private final GameModel model;
     private final BoardGeometry geometry;
     private final WordSplashAnimator wordSplash;
@@ -123,10 +127,12 @@ public class BoardPanel extends JPanel implements ModelListener {
     @Override
     public void addNotify() {
         super.addNotify();
-        flowerIntro.skipToEnd();
-        if (controller != null) {
-            controller.declencherCoupIASiNecessaire();
-        }
+        wordSplash.start(GameAssets.letsPlay(), LETS_PLAY_SPLASH_MS, () -> {
+            flowerIntro.start();
+            if (controller != null) {
+                controller.declencherCoupIASiNecessaire();
+            }
+        });
     }
 
     @Override
@@ -149,7 +155,13 @@ public class BoardPanel extends JPanel implements ModelListener {
             return;
         }
 
-        resolution.start(this::finishResolutionAnimation);
+        wordSplash.start(GameAssets.holdUp(), HOLD_UP_SPLASH_MS,
+            () -> resolution.start(() -> wordSplash.start(
+                GameAssets.gameOver(),
+                GAME_OVER_SPLASH_MS,
+                this::finishResolutionAnimation
+            ))
+        );
     }
 
     @Override
