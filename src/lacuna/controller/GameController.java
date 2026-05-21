@@ -176,25 +176,10 @@ public class GameController {
                 @Override
                 protected AIMove doInBackground() {
                     if (aiDepth <= 1) {
-                        lacuna.model.AI.AIState state = lacuna.model.AI.AIState.fromModel(model);
-                        List<AIMove> moves = new lacuna.model.AI.DefaultAIMoveGenerator().generateMoves(state);
-                        if (moves.isEmpty()) return null;
-
-                        // Hasard : on mélange tous les coups
-                        java.util.Collections.shuffle(moves);
-
-                        lacuna.model.AI.IAIEvaluator evaluator = new lacuna.model.AI.DefaultAIEvaluator();
-                        
-                        // Optimisation : on ne cherche pas l'idéal (pas de tri)
-                        // On choisit directement le premier coup "positif" au hasard
-                        for (AIMove move : moves) {
-                            if (evaluator.quickEval(state, move, aiPlayerIndex) > 0) {
-                                return move;
-                            }
-                        }
-                        
-                        // Si aucun coup ne donne d'avantage clair, on joue le premier au hasard
-                        return moves.get(0);
+                        return choisirCoupSimple(false);
+                    }
+                    if (aiDepth == 2) {
+                        return choisirCoupSimple(true);
                     }
                     Minimax minimax = new Minimax(model, aiPlayerIndex, aiDepth, 2000);
                     return minimax.findBestMove();
@@ -217,6 +202,36 @@ public class GameController {
         });
         timer.setRepeats(false);
         timer.start();
+    }
+
+    private AIMove choisirCoupSimple(boolean greedy) {
+        lacuna.model.AI.AIState state = lacuna.model.AI.AIState.fromModel(model);
+        List<AIMove> moves = new lacuna.model.AI.DefaultAIMoveGenerator(true).generateMoves(state);
+        if (moves.isEmpty()) return null;
+
+        lacuna.model.AI.IAIEvaluator evaluator = new lacuna.model.AI.DefaultAIEvaluator();
+
+        if (!greedy) {
+            java.util.Collections.shuffle(moves);
+            for (AIMove move : moves) {
+                if (evaluator.quickEval(state, move, aiPlayerIndex) > 0) {
+                    return move;
+                }
+            }
+            return moves.get(0);
+        }
+
+        AIMove bestMove = moves.get(0);
+        double bestScore = evaluator.quickEval(state, bestMove, aiPlayerIndex);
+        for (int i = 1; i < moves.size(); i++) {
+            AIMove move = moves.get(i);
+            double score = evaluator.quickEval(state, move, aiPlayerIndex);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+            }
+        }
+        return bestMove;
     }
 
     private void jouerCoupIA(AIMove move) {

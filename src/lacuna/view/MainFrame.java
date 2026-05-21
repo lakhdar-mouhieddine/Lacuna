@@ -67,7 +67,7 @@ public class MainFrame extends JFrame {
         int depth = 1;
         String iaName = "IA (Facile)";
         if ("Moyen".equalsIgnoreCase(niveau)) {
-            depth = 3;
+            depth = 2;
             iaName = "IA (Moyen)";
         } else if ("Difficile".equalsIgnoreCase(niveau)) {
             depth = 5;

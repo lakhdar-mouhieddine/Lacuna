@@ -1,25 +1,50 @@
 package lacuna.model.AI;
 
-public class DefaultAIEvaluator implements IAIEvaluator {
- 
-    private static final int MAJORITY_BASE = 0;
-    private static final int DIFF_MULT = 30;
-    private static final int DIFF_BONUS = 10;
-    private static final int MAJORITY_WIN_THRESHOLD = 4;
-    private static final int MAJORITY_WIN_BASE = 50000;
-    private static final int MAJORITY_WIN_STEP = 5000;
-    private static final int MAJORITY_THREE_BONUS = 1000;
+import lacuna.model.*;
 
-    private static final int QUICK_MYCOUNT_GT3 = 100;
-    private static final int QUICK_MYCOUNT_EQ3 = 100;
-    private static final int QUICK_OPP_COUNT_GE3 = 0;
-    private static final int QUICK_FLOWER_WEIGHT = 20;
+public class TunableAIEvaluator implements IAIEvaluator {
 
-    private static final double CF_WEIGHT_DEFAULT = 1.0;
-    private static final double CF_WEIGHT_LESS = 3.0;
-    private static final double CF_WEIGHT_EQUAL = 2.0;
-    private static final double CF_WEIGHT_MY_THREE = 2.5;
-    
+    private final int majorityBase;
+    private final int diffMult;
+    private final int diffBonus;
+    private final int majorityWinThreshold;
+    private final int majorityWinBase;
+    private final int majorityWinStep;
+    private final int majorityThreeBonus;
+
+    private final int quickMyCountGt3;
+    private final int quickMyCountEq3;
+    private final int quickOppCountGe3;
+    private final int quickFlowerWeight;
+
+    private final double cfWeightDefault;
+    private final double cfWeightLess;
+    private final double cfWeightEqual;
+    private final double cfWeightMyThree;
+
+    public TunableAIEvaluator(int majorityBase, int diffMult, int diffBonus,
+            int majorityWinThreshold, int majorityWinBase, int majorityWinStep, int majorityThreeBonus,
+            int quickMyCountGt3, int quickMyCountEq3, int quickOppCountGe3, int quickFlowerWeight,
+            double cfWeightDefault, double cfWeightLess, double cfWeightEqual, double cfWeightMyThree) {
+        this.majorityBase = majorityBase;
+        this.diffMult = diffMult;
+        this.diffBonus = diffBonus;
+        this.majorityWinThreshold = majorityWinThreshold;
+        this.majorityWinBase = majorityWinBase;
+        this.majorityWinStep = majorityWinStep;
+        this.majorityThreeBonus = majorityThreeBonus;
+
+        this.quickMyCountGt3 = quickMyCountGt3;
+        this.quickMyCountEq3 = quickMyCountEq3;
+        this.quickOppCountGe3 = quickOppCountGe3;
+        this.quickFlowerWeight = quickFlowerWeight;
+
+        this.cfWeightDefault = cfWeightDefault;
+        this.cfWeightLess = cfWeightLess;
+        this.cfWeightEqual = cfWeightEqual;
+        this.cfWeightMyThree = cfWeightMyThree;
+    }
+
     @Override
     public double evaluate(AIState state, int aiPlayer) {
         int opponent = 1 - aiPlayer;
@@ -53,19 +78,19 @@ public class DefaultAIEvaluator implements IAIEvaluator {
 
             if (finalAI[c] > finalOpp[c]) {
                 majAI++;
-                score += MAJORITY_BASE + diff * DIFF_MULT;
+                score += majorityBase + diff * diffMult;
             } else if (finalOpp[c] > finalAI[c]) {
                 majOpp++;
-                score -= MAJORITY_BASE + (-diff) * DIFF_MULT;
+                score -= majorityBase + (-diff) * diffMult;
             }
-            score += diff * DIFF_BONUS;
+            score += diff * diffBonus;
         }
 
-        if (majAI >= MAJORITY_WIN_THRESHOLD) score += MAJORITY_WIN_BASE + (majAI - (MAJORITY_WIN_THRESHOLD - 1)) * MAJORITY_WIN_STEP;
-        if (majOpp >= MAJORITY_WIN_THRESHOLD) score -= MAJORITY_WIN_BASE - (majOpp - (MAJORITY_WIN_THRESHOLD - 1)) * MAJORITY_WIN_STEP;
+        if (majAI >= majorityWinThreshold) score += majorityWinBase + (majAI - (majorityWinThreshold - 1)) * majorityWinStep;
+        if (majOpp >= majorityWinThreshold) score -= majorityWinBase - (majOpp - (majorityWinThreshold - 1)) * majorityWinStep;
 
-        if (majAI == (MAJORITY_WIN_THRESHOLD - 1)) score += MAJORITY_THREE_BONUS;
-        if (majOpp == (MAJORITY_WIN_THRESHOLD - 1)) score -= MAJORITY_THREE_BONUS;
+        if (majAI == (majorityWinThreshold - 1)) score += majorityThreeBonus;
+        if (majOpp == (majorityWinThreshold - 1)) score -= majorityThreeBonus;
 
         return score;
     }
@@ -83,12 +108,12 @@ public class DefaultAIEvaluator implements IAIEvaluator {
         myCount += 2;
 
         double score = 0;
-        if (myCount > 3) score += QUICK_MYCOUNT_GT3;
-        else if (myCount == 3) score += QUICK_MYCOUNT_EQ3;
-        if (oppCount >= 3) score += QUICK_OPP_COUNT_GE3;
+        if (myCount > 3) score += quickMyCountGt3;
+        else if (myCount == 3) score += quickMyCountEq3;
+        if (oppCount >= 3) score += quickOppCountGe3;
 
         score += countFlowersWon(state, move.pawnX, move.pawnY,
-            move.flower1Index, move.flower2Index) * QUICK_FLOWER_WEIGHT;
+            move.flower1Index, move.flower2Index) * quickFlowerWeight;
 
         return (player == aiPlayer) ? score : -score;
     }
@@ -129,10 +154,10 @@ public class DefaultAIEvaluator implements IAIEvaluator {
 
             if (newPawnDistSq < minExistingDistSq) {
                 int c = f.color.ordinal();
-                double weight = CF_WEIGHT_DEFAULT;
-                if (myCount[c] < oppCount[c]) weight = CF_WEIGHT_LESS;
-                else if (myCount[c] == oppCount[c]) weight = CF_WEIGHT_EQUAL;
-                else if (myCount[c] == (MAJORITY_WIN_THRESHOLD - 1)) weight = CF_WEIGHT_MY_THREE;
+                double weight = cfWeightDefault;
+                if (myCount[c] < oppCount[c]) weight = cfWeightLess;
+                else if (myCount[c] == oppCount[c]) weight = cfWeightEqual;
+                else if (myCount[c] == (majorityWinThreshold - 1)) weight = cfWeightMyThree;
                 score += weight;
             }
         }
