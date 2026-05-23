@@ -76,4 +76,30 @@ public final class OnlineSessionConnection implements AutoCloseable {
         } catch (IOException ignore) {
         }
     }
+
+    public synchronized boolean sendData(java.util.List<String> lines) {
+        if (closed) return false;
+        out.println("DATA " + lines.size());
+        for (String line : lines) {
+            out.println(line);
+        }
+        out.flush();
+        return !out.checkError();
+    }
+
+    public java.util.List<String> receiveData() throws IOException {
+        String command = in.readLine();
+        if (command == null) throw new IOException("Connection closed");
+        if (command.startsWith("LEFT")) throw new IOException("Peer left");
+        if (!command.startsWith("DATA ")) throw new IOException("Unexpected command: " + command);
+        
+        int count = Integer.parseInt(command.substring(5).trim());
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String line = in.readLine();
+            if (line == null) throw new IOException("Connection closed prematurely");
+            lines.add(line);
+        }
+        return lines;
+    }
 }

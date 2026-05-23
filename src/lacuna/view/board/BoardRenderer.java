@@ -50,15 +50,37 @@ public final class BoardRenderer {
     }
 
     public void paint(Graphics2D g2, List<FlowerPair> candidates, int selectedIndex, Flower hoveredFlower,
-            Point mousePoint) {
+            Point mousePoint, FlowerPair lastPhantomPair) {
         drawBoard(g2);
         if (model.getPhase() == GameModel.GamePhase.PLACING) {
+            drawAiPhantomPair(g2, lastPhantomPair);
             drawSelectionGuide(g2, candidates, selectedIndex, hoveredFlower, mousePoint);
         }
         drawElements(g2, null, hoveredFlower);
         drawPlacementFlowerAnimation(g2);
         drawResolutionPhase(g2);
         wordSplash.paint(g2);
+    }
+
+    private void drawAiPhantomPair(Graphics2D g2, FlowerPair pair) {
+        if (pair == null) return;
+        
+        Color pairColor = Theme.getColor(pair.f1().getColor());
+        int x1 = geometry.toScreenX(pair.f1().getX());
+        int y1 = geometry.toScreenY(pair.f1().getY());
+        int x2 = geometry.toScreenX(pair.f2().getX());
+        int y2 = geometry.toScreenY(pair.f2().getY());
+
+        g2.setColor(withAlpha(pairColor, 0.5f));
+        g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 0, new float[]{6f, 6f}, 0));
+        g2.drawLine(x1, y1, x2, y2);
+
+        int size = geometry.flowerSize();
+        Composite oldComposite = g2.getComposite();
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f));
+        GameAssets.drawFit(g2, GameAssets.flower(pair.f1().getColor()), x1, y1, size);
+        GameAssets.drawFit(g2, GameAssets.flower(pair.f2().getColor()), x2, y2, size);
+        g2.setComposite(oldComposite);
     }
 
     private void drawBoard(Graphics2D g2) {

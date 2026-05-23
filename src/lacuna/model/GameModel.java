@@ -27,6 +27,10 @@ public class GameModel {
     }
 
     public GameModel(String name1, String name2) {
+        this(name1, name2, new Random().nextLong());
+    }
+
+    public GameModel(String name1, String name2, long seed) {
         flowers = new ArrayList<>(NUM_FLOWERS);
         players = new Player[]{
             new Player(name1, 0),
@@ -35,8 +39,10 @@ public class GameModel {
         currentPlayerIndex = 0;
         phase = GamePhase.PLACING;
 
-        genererFleursTapis();
+        Random rng = new Random(seed);
+        genererFleursTapis(rng);
         creerPions();
+        assignRandomStartingFlower(rng);
     }
 
     public void addModelListener(ModelListener l) { listeners.add(l); }
@@ -47,8 +53,7 @@ public class GameModel {
         }
     }
 
-    private void genererFleursTapis() {
-        Random rng = new Random();
+    private void genererFleursTapis(Random rng) {
         List<FlowerColor> poolCouleurs = new ArrayList<>(NUM_FLOWERS);
         for (FlowerColor c : FlowerColor.values()) {
             for (int i = 0; i < FLOWERS_PER_COLOR; i++) poolCouleurs.add(c);
@@ -84,6 +89,12 @@ public class GameModel {
         for (Player p : players) {
             for (int i = 0; i < PAWNS_PER_PLAYER; i++) p.addPawn(new Pawn(p));
         }
+    }
+
+    private void assignRandomStartingFlower(Random rng) {
+        if (flowers.isEmpty()) return;
+        Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
+        players[0].captureFlower(startingFlower);
     }
 
     public boolean estLigneValide(Flower f1, Flower f2) {
