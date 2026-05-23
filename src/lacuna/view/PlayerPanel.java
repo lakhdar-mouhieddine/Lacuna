@@ -235,12 +235,15 @@ public class PlayerPanel extends JPanel implements ModelListener {
             GameAssets.prepare(g2);
 
             FontMetrics metrics = g2.getFontMetrics(getFont());
-            int iconX = getWidth() - ICON_SIZE - 7;
-            int iconCenterX = iconX + ICON_SIZE / 2;
-            int centerY = getHeight() / 2;
+            int gap = 8;
             int textWidth = metrics.stringWidth(score);
-            int textX = Math.max(0, iconX - 8 - textWidth);
+            int totalContentWidth = textWidth + gap + ICON_SIZE;
+            int startX = (getWidth() - totalContentWidth) / 2;
+
+            int textX = startX;
             int textY = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+            int iconCenterX = startX + textWidth + gap + ICON_SIZE / 2;
+            int centerY = getHeight() / 2;
 
             if (shouldShowAura() && image != null) {
                 drawAura(g2, iconCenterX, centerY);

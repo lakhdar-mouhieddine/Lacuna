@@ -17,6 +17,7 @@ public class MainFrame extends JFrame {
     private PlayerPanel panelTop;
     private PlayerPanel panelBottom;
     private GameController controleur;
+    private TutorialOverlay tutorialOverlay;
     private String lastNom1;
     private String lastNom2;
     private int lastAiPlayerIndex;
@@ -25,6 +26,18 @@ public class MainFrame extends JFrame {
     private boolean lastIsHost;
     private boolean isOnlineSession;
     private int onlineGameCount = 0;
+
+    public BoardPanel getBoardPanel() {
+        return plateau;
+    }
+
+    public PlayerPanel getPanelTop() {
+        return panelTop;
+    }
+
+    public PlayerPanel getPanelBottom() {
+        return panelBottom;
+    }
 
     public MainFrame() {
         super("Lacuna");
@@ -148,9 +161,11 @@ public class MainFrame extends JFrame {
 
         JButton undoButton = createUndoButton(modele);
         JButton quitButton = createQuitButton();
+        JButton helpButton = createHelpButton();
 
         JPanel topBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
         topBar.setOpaque(false);
+        topBar.add(helpButton);
         topBar.add(undoButton);
         topBar.add(quitButton);
 
@@ -169,6 +184,9 @@ public class MainFrame extends JFrame {
                 plateau.setBounds(0, 0, size.width, size.height);
                 turnGlow.setBounds(0, 0, size.width, size.height);
                 hud.setBounds(0, 0, size.width, size.height);
+                if (tutorialOverlay != null) {
+                    tutorialOverlay.setBounds(0, 0, size.width, size.height);
+                }
             }
         };
         gameRoot.setBackground(new Color(15, 16, 22));
@@ -180,6 +198,28 @@ public class MainFrame extends JFrame {
         setContentPane(gameRoot);
         revalidate();
         repaint();
+    }
+
+    public void afficherTutoriel() {
+        if (tutorialOverlay != null) {
+            return;
+        }
+        tutorialOverlay = new TutorialOverlay(this);
+        JLayeredPane gameRoot = (JLayeredPane) getContentPane();
+        gameRoot.add(tutorialOverlay, JLayeredPane.DRAG_LAYER);
+        tutorialOverlay.setBounds(0, 0, gameRoot.getWidth(), gameRoot.getHeight());
+        gameRoot.revalidate();
+        gameRoot.repaint();
+    }
+
+    public void fermerTutoriel() {
+        if (tutorialOverlay != null) {
+            JLayeredPane gameRoot = (JLayeredPane) getContentPane();
+            gameRoot.remove(tutorialOverlay);
+            tutorialOverlay = null;
+            gameRoot.revalidate();
+            gameRoot.repaint();
+        }
     }
 
     public void afficherAttenteRematch() {
@@ -279,6 +319,68 @@ public class MainFrame extends JFrame {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(100, 32));
         btn.addActionListener(e -> annulerCoup());
+        return btn;
+    }
+
+    private JButton createHelpButton() {
+        JButton btn = new JButton("TUTORIEL") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(new Color(66, 135, 245, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(new Color(255, 255, 255, 40));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        Icon helpIcon = new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(220, 220, 230));
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                // Draw a beautiful small question mark icon
+                g2.drawArc(x + 2, y + 2, 8, 8, -40, 220);
+                g2.drawLine(x + 10, y + 6, x + 6, y + 9);
+                g2.drawLine(x + 6, y + 9, x + 6, y + 10);
+                g2.fillRect(x + 5, y + 12, 2, 2);
+
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return 14;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 14;
+            }
+        };
+
+        btn.setIcon(helpIcon);
+        btn.setIconTextGap(6);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setForeground(new Color(220, 220, 230));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(110, 32));
+        btn.addActionListener(e -> afficherTutoriel());
         return btn;
     }
 

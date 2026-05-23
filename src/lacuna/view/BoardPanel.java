@@ -124,6 +124,14 @@ public class BoardPanel extends JPanel implements ModelListener {
         this.controller = controller;
     }
 
+    public BoardGeometry getGeometry() {
+        return geometry;
+    }
+
+    public GameModel getModel() {
+        return model;
+    }
+
     @Override
     public void addNotify() {
         super.addNotify();
