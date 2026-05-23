@@ -173,6 +173,13 @@ public class BoardPanel extends JPanel implements ModelListener {
         repaint();
     }
 
+    public void onUndoPerformed() {
+        clearSelection();
+        lastPhantomPair = null;
+        toast.show("Coup annulé !", true);
+        repaint();
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);

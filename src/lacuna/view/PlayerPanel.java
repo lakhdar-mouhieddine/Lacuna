@@ -10,9 +10,9 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 
 public class PlayerPanel extends JPanel implements ModelListener {
-    private static final int PANEL_WIDTH = 110;
+    private static final int PANEL_WIDTH = 130;
     private static final int ICON_SIZE = 22;
-    private static final int SCORE_ITEM_WIDTH = 80;
+    private static final int SCORE_ITEM_WIDTH = 100;
     private static final int SCORE_ITEM_HEIGHT = 34;
     private static final Color WIN_AURA = new Color(74, 218, 126);
     private static final Color LOSE_AURA = new Color(239, 80, 88);
@@ -55,6 +55,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
+        gbc.weightx = 1.0;
         gbc.insets = new Insets(8, 0, 8, 0);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         add(playerTab, gbc);

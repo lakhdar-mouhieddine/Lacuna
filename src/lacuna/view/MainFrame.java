@@ -92,12 +92,12 @@ public class MainFrame extends JFrame {
         isOnlineSession = true;
         this.lastIsHost = isHost;
         this.onlineGameCount = 0;
-        
+
         String myName = sessionConnection.getPlayerName();
         String nom1 = isHost ? myName : "Adversaire";
         String nom2 = isHost ? "Adversaire" : myName;
         int localPlayerIndex = isHost ? 0 : 1;
-        
+
         construireInterface(nom1, nom2, -1, 0, sessionConnection, localPlayerIndex);
     }
 
@@ -122,12 +122,13 @@ public class MainFrame extends JFrame {
         return label;
     }
 
-    private void construireInterface(String nom1, String nom2, int aiPlayerIndex, int aiDepth, OnlineSessionConnection networkSession, int localPlayerIndex) {
+    private void construireInterface(String nom1, String nom2, int aiPlayerIndex, int aiDepth,
+            OnlineSessionConnection networkSession, int localPlayerIndex) {
         this.lastNom1 = nom1;
         this.lastNom2 = nom2;
         this.lastAiPlayerIndex = aiPlayerIndex;
         this.lastAiDepth = aiDepth;
-        
+
         GameModel modele;
         if (networkSession != null) {
             long seed = networkSession.getSessionId().hashCode() + onlineGameCount;
@@ -141,13 +142,23 @@ public class MainFrame extends JFrame {
         plateau = new BoardPanel(modele);
         TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
-        controleur = new GameController(modele, this, plateau, aiPlayerIndex, aiDepth, networkSession, localPlayerIndex);
+        controleur = new GameController(modele, this, plateau, aiPlayerIndex, aiDepth, networkSession,
+                localPlayerIndex);
         plateau.setController(controleur);
+
+        JButton undoButton = createUndoButton(modele);
+        JButton quitButton = createQuitButton();
+
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+        topBar.setOpaque(false);
+        topBar.add(undoButton);
+        topBar.add(quitButton);
 
         JPanel hud = new JPanel(new BorderLayout());
         hud.setOpaque(false);
         hud.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        
+
+        hud.add(topBar, BorderLayout.NORTH);
         hud.add(panelTop, BorderLayout.WEST);
         hud.add(panelBottom, BorderLayout.EAST);
 
@@ -165,7 +176,7 @@ public class MainFrame extends JFrame {
         gameRoot.add(plateau, JLayeredPane.DEFAULT_LAYER);
         gameRoot.add(turnGlow, TURN_GLOW_LAYER);
         gameRoot.add(hud, JLayeredPane.PALETTE_LAYER);
-        
+
         setContentPane(gameRoot);
         revalidate();
         repaint();
@@ -196,6 +207,146 @@ public class MainFrame extends JFrame {
 
     public void retourMenuPrincipal() {
         afficherMenu();
+    }
+
+    public void annulerCoup() {
+        if (controleur != null) {
+            controleur.annulerCoup();
+        }
+    }
+
+    private JButton createUndoButton(GameModel modele) {
+        JButton btn = new JButton("UNDO") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(new Color(120, 118, 130, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(new Color(255, 255, 255, 40));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        Icon undoIcon = new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(220, 220, 230));
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                java.awt.geom.GeneralPath path = new java.awt.geom.GeneralPath();
+                // Draw curved arrow body (starts bottom right, curves up and left)
+                path.moveTo(x + 13, y + 11);
+                path.curveTo(x + 13, y + 2, x + 6, y + 2, x + 2, y + 6);
+                // Draw arrow head
+                path.moveTo(x + 2, y + 6);
+                path.lineTo(x + 7, y + 6);
+                path.moveTo(x + 2, y + 6);
+                path.lineTo(x + 2, y + 1);
+
+                g2.draw(path);
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return 16;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 14;
+            }
+        };
+
+        btn.setIcon(undoIcon);
+        btn.setIconTextGap(6);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setForeground(new Color(220, 220, 230));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(100, 32));
+        btn.addActionListener(e -> annulerCoup());
+        return btn;
+    }
+
+    private JButton createQuitButton() {
+        JButton btn = new JButton("QUIT") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(new Color(239, 80, 88, 210)); // Reddish color for quit
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(new Color(255, 255, 255, 40));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        Icon quitIcon = new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(220, 220, 230));
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                g2.drawLine(x + 2, y + 2, x + 10, y + 10);
+                g2.drawLine(x + 10, y + 2, x + 2, y + 10);
+
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return 12;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 12;
+            }
+        };
+
+        btn.setIcon(quitIcon);
+        btn.setIconTextGap(6);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setForeground(new Color(220, 220, 230));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(100, 32));
+        btn.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(this,
+                    "Voulez-vous vraiment quitter la partie en cours ?",
+                    "Quitter",
+                    JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                retourMenuPrincipal();
+            }
+        });
+        return btn;
     }
 
     public static void main(String[] args) {

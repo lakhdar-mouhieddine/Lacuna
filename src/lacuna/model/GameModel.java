@@ -19,6 +19,7 @@ public class GameModel {
     private GamePhase phase;
 
     private final List<ModelListener> listeners = new ArrayList<>();
+    private final java.util.Deque<MoveRecord> moveHistory = new java.util.ArrayDeque<>();
 
     public enum GamePhase {
         PLACING,
@@ -130,6 +131,8 @@ public class GameModel {
         }
         if (pionLibre == null) return false;
 
+        moveHistory.push(new MoveRecord(courant, pionLibre, f1, f2));
+
         pionLibre.place(px, py);
         courant.incrementPawnsPlaced();
         courant.captureFlower(f1);
@@ -138,6 +141,24 @@ public class GameModel {
         avancerTour();
         notifyListeners();
         return true;
+    }
+
+    public boolean annulerDernierCoup() {
+        if (moveHistory.isEmpty() || phase != GamePhase.PLACING) return false;
+
+        MoveRecord move = moveHistory.pop();
+        move.player.uncaptureFlower(move.flower1);
+        move.player.uncaptureFlower(move.flower2);
+        move.pawn.unplace();
+        move.player.decrementPawnsPlaced();
+        currentPlayerIndex = move.player.getIndex();
+
+        notifyListeners();
+        return true;
+    }
+
+    public boolean peutAnnuler() {
+        return !moveHistory.isEmpty() && phase == GamePhase.PLACING;
     }
 
     private void avancerTour() {
@@ -232,4 +253,18 @@ public class GameModel {
     public Player[] getJoueurs() { return players; }
     public Player getJoueurCourant() { return players[currentPlayerIndex]; }
     public GamePhase getPhase() { return phase; }
+
+    private static final class MoveRecord {
+        final Player player;
+        final Pawn pawn;
+        final Flower flower1;
+        final Flower flower2;
+
+        MoveRecord(Player player, Pawn pawn, Flower flower1, Flower flower2) {
+            this.player = player;
+            this.pawn = pawn;
+            this.flower1 = flower1;
+            this.flower2 = flower2;
+        }
+    }
 }

@@ -31,6 +31,8 @@ public class GameController {
     private boolean opponentWantsRematch = false;
 
     private boolean aiThinking = false;
+    private Timer aiTimer;
+    private SwingWorker<AIMove, Void> aiWorker;
 
     public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, int aiPlayerIndex, int aiDepth, lacuna.network.OnlineSessionConnection networkSession, int localPlayerIndex) {
         this.model = model;
@@ -167,12 +169,29 @@ public class GameController {
         }
     }
 
+    public void annulerCoup() {
+        if (networkSession != null) return;
+        if (model.getPhase() != GameModel.GamePhase.PLACING) return;
+        if (!model.peutAnnuler()) return;
+
+        if (aiThinking) {
+            if (aiTimer != null) aiTimer.stop();
+            if (aiWorker != null) aiWorker.cancel(true);
+            aiThinking = false;
+        }
+        if (!model.peutAnnuler()) return;
+
+        model.annulerDernierCoup();
+        boardPanel.onUndoPerformed();
+        declencherCoupIASiNecessaire();
+    }
+
     private void schedulerCoupIA() {
         if (aiThinking) return;
         aiThinking = true;
 
-        Timer timer = new Timer(AI_THINK_DELAY_MS, e -> {
-            SwingWorker<AIMove, Void> worker = new SwingWorker<>() {
+        aiTimer = new Timer(AI_THINK_DELAY_MS, e -> {
+            aiWorker = new SwingWorker<>() {
                 @Override
                 protected AIMove doInBackground() {
                     if (aiDepth <= 1) {
@@ -187,6 +206,7 @@ public class GameController {
 
                 @Override
                 protected void done() {
+                    if (isCancelled()) return;
                     aiThinking = false;
                     try {
                         AIMove move = get();
@@ -194,14 +214,16 @@ public class GameController {
                             jouerCoupIA(move);
                         }
                     } catch (Exception ex) {
-                        ex.printStackTrace();
+                        if (!(ex instanceof java.util.concurrent.CancellationException)) {
+                            ex.printStackTrace();
+                        }
                     }
                 }
             };
-            worker.execute();
+            aiWorker.execute();
         });
-        timer.setRepeats(false);
-        timer.start();
+        aiTimer.setRepeats(false);
+        aiTimer.start();
     }
 
     private AIMove choisirCoupSimple(boolean greedy) {
