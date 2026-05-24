@@ -9,10 +9,12 @@ import lacuna.model.Player;
 import lacuna.view.board.BoardGeometry;
 import lacuna.view.board.BoardRenderer;
 import lacuna.view.board.FlowerIntroAnimator;
+import lacuna.view.board.CylinderIntroAnimator;
 import lacuna.view.board.PlacementAnimator;
 import lacuna.view.board.ResolutionAnimator;
 import lacuna.view.board.ToastMessage;
 import lacuna.view.board.WordSplashAnimator;
+import lacuna.view.board.FlowerPair;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,7 +26,6 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.util.ArrayList;
 import java.util.List;
-import lacuna.view.board.FlowerPair;
 
 public class BoardPanel extends JPanel implements ModelListener {
     private static final Cursor BLANK_CURSOR = createBlankCursor();
@@ -44,14 +45,15 @@ public class BoardPanel extends JPanel implements ModelListener {
 
 
 
-    private static final int LETS_PLAY_SPLASH_MS = 1150;
-    private static final int HOLD_UP_SPLASH_MS = 1200;
-    private static final int GAME_OVER_SPLASH_MS = 950;
+    private static final int LETS_PLAY_SPLASH_MS = 3200;
+    private static final int HOLD_UP_SPLASH_MS = 3200;
+    private static final int GAME_OVER_SPLASH_MS = 3200;
 
     private final GameModel model;
     private final BoardGeometry geometry;
     private final WordSplashAnimator wordSplash;
     private final FlowerIntroAnimator flowerIntro;
+    private final CylinderIntroAnimator cylinderIntro;
     private final PlacementAnimator placement;
     private final ResolutionAnimator resolution;
     private final ToastMessage toast;
@@ -73,10 +75,11 @@ public class BoardPanel extends JPanel implements ModelListener {
         this.geometry = new BoardGeometry(this);
         this.wordSplash = new WordSplashAnimator(this);
         this.flowerIntro = new FlowerIntroAnimator(model, this);
+        this.cylinderIntro = new CylinderIntroAnimator(model, this);
         this.placement = new PlacementAnimator(this);
         this.resolution = new ResolutionAnimator(model, geometry, this);
         this.toast = new ToastMessage(this);
-        this.renderer = new BoardRenderer(model, geometry, this, wordSplash, flowerIntro, placement, resolution);
+        this.renderer = new BoardRenderer(model, geometry, this, wordSplash, flowerIntro, cylinderIntro, placement, resolution);
 
         this.model.addModelListener(this);
         setBackground(new Color(20, 22, 28));
@@ -135,8 +138,7 @@ public class BoardPanel extends JPanel implements ModelListener {
     @Override
     public void addNotify() {
         super.addNotify();
-        wordSplash.start(GameAssets.letsPlay(), LETS_PLAY_SPLASH_MS, () -> {
-            flowerIntro.start();
+        cylinderIntro.start(geometry, () -> {
             if (controller != null) {
                 controller.declencherCoupIASiNecessaire();
             }
@@ -146,6 +148,7 @@ public class BoardPanel extends JPanel implements ModelListener {
     @Override
     public void removeNotify() {
         flowerIntro.stop();
+        cylinderIntro.stop();
         placement.stop();
         resolution.clear();
         wordSplash.stop();
@@ -163,13 +166,7 @@ public class BoardPanel extends JPanel implements ModelListener {
             return;
         }
 
-        wordSplash.start(GameAssets.holdUp(), HOLD_UP_SPLASH_MS,
-            () -> resolution.start(() -> wordSplash.start(
-                GameAssets.gameOver(),
-                GAME_OVER_SPLASH_MS,
-                this::finishResolutionAnimation
-            ))
-        );
+        resolution.start(this::finishResolutionAnimation);
     }
 
     @Override
@@ -377,8 +374,9 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private boolean isInputBlocked() {
-        return wordSplash.active() || flowerIntro.blocksInput() || placement.active()
-                || (controller != null && controller.isAiThinking());
+        return cylinderIntro.active() || placement.active()
+                || (controller != null && (controller.isAiThinking() || controller.isAiTurn()))
+                || model.getPhase() != GameModel.GamePhase.PLACING;
     }
 
     public void montrerIntentionIA(Flower f1, Flower f2, double pawnX, double pawnY, Runnable onFinished) {

@@ -54,3 +54,5 @@ src/lacuna/view/PlayerNamesDialog.java
 src/lacuna/view/PlayerPanel.java
 src/lacuna/view/Theme.java
 src/lacuna/view/TurnGlowPanel.java
+src/lacuna/view/board/CylinderIntroAnimator.java
+src/lacuna/view/board/HandGrabAnimator.java

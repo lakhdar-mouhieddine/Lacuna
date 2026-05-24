@@ -25,6 +25,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
     private final JPanel scoreTab;
     private final java.util.Map<FlowerColor, Integer> previousScores = new java.util.EnumMap<>(FlowerColor.class);
     private final java.util.Map<FlowerColor, Integer> bonusValues = new java.util.EnumMap<>(FlowerColor.class);
+    private final java.util.Map<FlowerColor, Long> scoreIncrementTimes = new java.util.EnumMap<>(FlowerColor.class);
     private Timer bonusTimer;
     private long bonusStartedAt;
     private Timer auraTimer;
@@ -91,6 +92,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
             if (current > prev) {
                 bonusValues.put(color, current - prev);
                 startBonusTimer();
+                triggerPulse(color);
             }
             previousScores.put(color, current);
         }
@@ -130,8 +132,23 @@ public class PlayerPanel extends JPanel implements ModelListener {
             GameAssets.flower(color),
             scoreAura(playerScore, opponentScore),
             playerScore,
-            bonusValues.getOrDefault(color, 0)
+            bonusValues.getOrDefault(color, 0),
+            color
         );
+    }
+
+    private void triggerPulse(FlowerColor color) {
+        scoreIncrementTimes.put(color, System.currentTimeMillis());
+        Timer pulseTimer = new Timer(16, e -> {
+            Long startTime = scoreIncrementTimes.get(color);
+            if (startTime == null || System.currentTimeMillis() - startTime >= 350) {
+                scoreTab.repaint();
+                ((Timer) e.getSource()).stop();
+            } else {
+                scoreTab.repaint();
+            }
+        });
+        pulseTimer.start();
     }
 
     private Player opponent() {
@@ -216,39 +233,65 @@ public class PlayerPanel extends JPanel implements ModelListener {
         private final Color aura;
         private final int count;
         private final int bonus;
-
-        ScoreItem(String score, BufferedImage image, Color aura, int count, int bonus) {
+        private final FlowerColor color;
+ 
+        ScoreItem(String score, BufferedImage image, Color aura, int count, int bonus, FlowerColor color) {
             this.score = score;
             this.image = image;
             this.aura = aura;
             this.count = count;
             this.bonus = bonus;
+            this.color = color;
             setOpaque(false);
             setFont(new Font("Segoe UI", Font.BOLD, 16));
             setForeground(Color.WHITE);
             setPreferredSize(new Dimension(SCORE_ITEM_WIDTH, SCORE_ITEM_HEIGHT));
         }
-
+ 
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             GameAssets.prepare(g2);
+ 
+            double itemScale = 1.0;
+            Long incrementTime = scoreIncrementTimes.get(color);
+            if (incrementTime != null) {
+                long elapsed = System.currentTimeMillis() - incrementTime;
+                if (elapsed < 350) {
+                    double t = elapsed / 350.0;
+                    itemScale = 1.0 + 0.14 * Math.sin(Math.PI * t);
+                } else {
+                    scoreIncrementTimes.remove(color);
+                }
+            }
 
+            if (itemScale > 1.0) {
+                double cx = getWidth() / 2.0;
+                double cy = getHeight() / 2.0;
+                g2.translate(cx, cy);
+                g2.scale(itemScale, itemScale);
+                g2.translate(-cx, -cy);
+            }
+
+            if (shouldShowAura()) {
+                g2.setColor(new Color(aura.getRed(), aura.getGreen(), aura.getBlue(), 45));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                g2.setColor(new Color(aura.getRed(), aura.getGreen(), aura.getBlue(), 120));
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 12, 12);
+            }
+ 
             FontMetrics metrics = g2.getFontMetrics(getFont());
             int gap = 8;
             int textWidth = metrics.stringWidth(score);
             int totalContentWidth = textWidth + gap + ICON_SIZE;
             int startX = (getWidth() - totalContentWidth) / 2;
-
+ 
             int textX = startX;
             int textY = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
             int iconCenterX = startX + textWidth + gap + ICON_SIZE / 2;
             int centerY = getHeight() / 2;
-
-            if (shouldShowAura() && image != null) {
-                drawAura(g2, iconCenterX, centerY);
-            }
-
+ 
             g2.setFont(getFont());
             g2.setColor(getForeground());
             g2.drawString(score, textX, textY);
@@ -256,7 +299,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
             if (image != null) {
                 GameAssets.drawFit(g2, image, iconCenterX, centerY, ICON_SIZE);
             }
-
+ 
             if (bonus > 0) {
                 long elapsed = System.currentTimeMillis() - bonusStartedAt;
                 if (elapsed < 2000) {
@@ -268,21 +311,8 @@ public class PlayerPanel extends JPanel implements ModelListener {
                     g2.drawString(msg, iconCenterX + ICON_SIZE / 2 + 2, centerY - Math.round(bOffset));
                 }
             }
-
+ 
             g2.dispose();
-        }
-
-        private void drawAura(Graphics2D g2, int centerX, int centerY) {
-            float intensity = 0.78f + auraPulse * 0.18f;
-            int pulseSize = Math.round(auraPulse * 2f);
-            drawAuraCircle(g2, centerX, centerY, 34 + pulseSize, Math.round(24 * intensity));
-            drawAuraCircle(g2, centerX, centerY, 28 + pulseSize, Math.round(34 * intensity));
-            drawAuraCircle(g2, centerX, centerY, 22 + pulseSize, Math.round(44 * intensity));
-        }
-
-        private void drawAuraCircle(Graphics2D g2, int centerX, int centerY, int size, int alpha) {
-            g2.setColor(new Color(aura.getRed(), aura.getGreen(), aura.getBlue(), alpha));
-            g2.fillOval(centerX - size / 2, centerY - size / 2, size, size);
         }
     }
 }

@@ -4,10 +4,14 @@ import lacuna.model.Flower;
 import lacuna.model.GameModel;
 import lacuna.model.Pawn;
 import lacuna.model.Player;
+import lacuna.model.FlowerColor;
 import lacuna.view.GameAssets;
 import lacuna.view.Theme;
+import lacuna.view.PlayerPanel;
+import lacuna.view.MainFrame;
 
 import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -17,8 +21,12 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.LinearGradientPaint;
+import java.awt.RadialGradientPaint;
 import java.awt.image.BufferedImage;
+import java.awt.Component;
 import java.util.List;
+import javax.swing.JPanel;
 
 public final class BoardRenderer {
     private static final BasicStroke RESOLUTION_LINE_STROKE = new BasicStroke(1.8f, BasicStroke.CAP_ROUND,
@@ -29,6 +37,7 @@ public final class BoardRenderer {
     private final JComponent component;
     private final WordSplashAnimator wordSplash;
     private final FlowerIntroAnimator flowerIntro;
+    private final CylinderIntroAnimator cylinderIntro;
     private final PlacementAnimator placement;
     private final ResolutionAnimator resolution;
     private BufferedImage cachedVoronoi;
@@ -40,6 +49,7 @@ public final class BoardRenderer {
             JComponent component,
             WordSplashAnimator wordSplash,
             FlowerIntroAnimator flowerIntro,
+            CylinderIntroAnimator cylinderIntro,
             PlacementAnimator placement,
             ResolutionAnimator resolution) {
         this.model = model;
@@ -47,6 +57,7 @@ public final class BoardRenderer {
         this.component = component;
         this.wordSplash = wordSplash;
         this.flowerIntro = flowerIntro;
+        this.cylinderIntro = cylinderIntro;
         this.placement = placement;
         this.resolution = resolution;
     }
@@ -58,10 +69,17 @@ public final class BoardRenderer {
             drawAiPhantomPair(g2, lastPhantomPair);
             drawSelectionGuide(g2, candidates, selectedIndex, hoveredFlower, mousePoint);
         }
+        
+        drawLandingRipples(g2);
+
         drawElements(g2, null, hoveredFlower);
         drawPlacementFlowerAnimation(g2);
         drawResolutionPhase(g2);
         wordSplash.paint(g2);
+
+        if (cylinderIntro.active()) {
+            drawCylinder(g2);
+        }
     }
 
     private void drawAiPhantomPair(Graphics2D g2, FlowerPair pair) {
@@ -156,7 +174,7 @@ public final class BoardRenderer {
         }
 
         if (candidates.size() > 1 && mousePoint != null) {
-            String tip = "Molette ⇅ : Choisir la ligne";
+            String tip = "Molette : Choisir la ligne";
             g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
             FontMetrics fm = g2.getFontMetrics();
             int w = fm.stringWidth(tip) + 16;
@@ -176,16 +194,25 @@ public final class BoardRenderer {
 
     private void drawElements(Graphics2D g2, Flower selectedFlower, Flower hoveredFlower) {
         java.util.List<ElementOnBoard> elements = new java.util.ArrayList<>();
-
-        for (Flower flower : model.getFleurs()) {
-            if (flower.isOnBoard()) {
-                elements.add(new ElementOnBoard(flower, flower.getY()));
+ 
+        if (cylinderIntro.active()) {
+            for (Flower flower : model.getFleurs()) {
+                if (flower.isOnBoard() && cylinderIntro.shouldDrawFlower(flower)) {
+                    Point.Double pos = cylinderIntro.getFlowerPosition(flower, geometry);
+                    elements.add(new ElementOnBoard(flower, pos.y));
+                }
             }
-        }
-        for (Player player : model.getJoueurs()) {
-            for (Pawn pawn : player.getPawns()) {
-                if (pawn.isPlaced()) {
-                    elements.add(new ElementOnBoard(pawn, pawn.getY()));
+        } else {
+            for (Flower flower : model.getFleurs()) {
+                if (flower.isOnBoard()) {
+                    elements.add(new ElementOnBoard(flower, flower.getY()));
+                }
+            }
+            for (Player player : model.getJoueurs()) {
+                for (Pawn pawn : player.getPawns()) {
+                    if (pawn.isPlaced()) {
+                        elements.add(new ElementOnBoard(pawn, pawn.getY()));
+                    }
                 }
             }
         }
@@ -198,9 +225,9 @@ public final class BoardRenderer {
 
     private void drawElement(Graphics2D g2, Object item, Flower selectedFlower, Flower hoveredFlower) {
         if (item instanceof Flower flower) {
-            if (shouldDrawFlowerIntro()) {
-                drawFlowerIntro(g2, flower);
-            } else if (flowerIntro.flowersVisible() || model.getPhase() != GameModel.GamePhase.PLACING) {
+            if (cylinderIntro.active()) {
+                drawCylinderIntroFlower(g2, flower);
+            } else {
                 drawFlower(g2, flower, selectedFlower, hoveredFlower);
             }
             return;
@@ -286,25 +313,44 @@ public final class BoardRenderer {
         }
 
         float progress = placement.progress();
-        drawPlacementDisappearingFlower(g2, animation.firstFlower(), progress);
-        drawPlacementDisappearingFlower(g2, animation.secondFlower(), progress);
+        drawPlacementDisappearingFlower(g2, animation.pawn(), animation.firstFlower(), progress);
+        drawPlacementDisappearingFlower(g2, animation.pawn(), animation.secondFlower(), progress);
     }
 
-    private void drawPlacementDisappearingFlower(Graphics2D g2, Flower flower, float progress) {
+    private void drawPlacementDisappearingFlower(Graphics2D g2, Pawn pawn, Flower flower, float progress) {
         float eased = AnimationMath.smooth(progress);
-        float alpha = Math.max(0f, 1f - eased);
-        int x = geometry.toScreenX(flower.getX());
-        int y = geometry.toScreenY(flower.getY());
-        int size = Math.max(1, Math.round(geometry.flowerSize() * (1f - 0.58f * eased)));
+        int startX = geometry.toScreenX(flower.getX());
+        int startY = geometry.toScreenY(flower.getY());
 
-        Composite oldComposite = g2.getComposite();
-        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-        GameAssets.drawFit(g2, GameAssets.flower(flower.getColor()), x, y, size);
-        g2.setComposite(oldComposite);
+        java.awt.Window win = SwingUtilities.getWindowAncestor(component);
+        PlayerPanel targetPanel = null;
+        if (win instanceof MainFrame frame) {
+            if (pawn.getOwner().getIndex() == 0) {
+                targetPanel = frame.getPanelTop();
+            } else {
+                targetPanel = frame.getPanelBottom();
+            }
+        }
+
+        Point targetPos = getScoreItemCenter(targetPanel, flower.getColor());
+
+        double x = startX + (targetPos.x - startX) * eased;
+        double y = startY + (targetPos.y - startY) * eased;
+
+        double startSize = geometry.flowerSize();
+        double endSize = 22.0;
+        double size = startSize + (endSize - startSize) * eased;
+
+        double angle = eased * Math.PI * 2.0;
+
+        var oldTransform = g2.getTransform();
+        g2.translate(x, y);
+        g2.rotate(angle);
+        GameAssets.drawFit(g2, GameAssets.flower(flower.getColor()), 0, 0, (int) Math.round(size));
+        g2.setTransform(oldTransform);
     }
 
     
-    // Algorithme: Diagramme de Voronoi (Nearest-Neighbor)
     private void drawResolutionPhase(Graphics2D g2) {
         ResolutionAnimator.ResolutionPhase phase = resolution.currentPhase();
         if (wordSplash.active() || model.getPhase() != GameModel.GamePhase.RESOLVING || phase == null) {
@@ -314,7 +360,6 @@ public final class BoardRenderer {
         }
 
         float progress = resolution.progress();
-        float vanishProgress = resolution.vanishProgress();
         Color playerColor = phase.color();
 
         if (phase != lastPhase || cachedVoronoi == null) {
@@ -336,25 +381,15 @@ public final class BoardRenderer {
         for (ResolutionAnimator.ResolutionStep step : phase.steps()) {
             g2.setColor(withAlpha(playerColor, 0.32f * lineFade));
             g2.drawLine(step.pawnX(), step.pawnY(), step.flowerX(), step.flowerY());
-
+            
             if (phase.isCaptured()) {
-                drawFadingFlower(g2, step, vanishProgress);
+                drawFlyingFlower(g2, phase, step);
             }
         }
     }
 
-    private void drawFadingFlower(Graphics2D g2, ResolutionAnimator.ResolutionStep step, float progress) {
-        Composite oldComposite = g2.getComposite();
-        float alpha = Math.max(0f, 1f - progress);
-        int size = Math.max(1, Math.round(geometry.flowerSize() * (1f - 0.35f * progress)));
-
-        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-        GameAssets.drawFit(g2, GameAssets.flower(step.flower().getColor()), step.flowerX(), step.flowerY(), size);
-        g2.setComposite(oldComposite);
-    }
-
     private void updateVoronoiCache(ResolutionAnimator.ResolutionPhase phase) {
-        int res = 4; 
+        int res = 1; 
         int w = component.getWidth() / res;
         int h = component.getHeight() / res;
         cachedVoronoi = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
@@ -375,7 +410,7 @@ public final class BoardRenderer {
                 for (Pawn p : allPawns) {
                     double dx = p.getX() - mx;
                     double dy = p.getY() - my;
-                    double d = dx * dx + dy * dy; // Distance au carré pour éviter Math.sqrt
+                    double d = dx * dx + dy * dy;
                     if (d < minDist) {
                         minDist = d;
                         closest = p;
@@ -396,6 +431,142 @@ public final class BoardRenderer {
     private Color withAlpha(Color color, float alpha) {
         int value = Math.max(0, Math.min(255, Math.round(alpha * 255)));
         return new Color(color.getRed(), color.getGreen(), color.getBlue(), value);
+    }
+
+    private void drawCylinderIntroFlower(Graphics2D g2, Flower flower) {
+        Point.Double pos = cylinderIntro.getFlowerPosition(flower, geometry);
+        double scale = cylinderIntro.getFlowerScale(flower);
+        double angle = cylinderIntro.getFlowerAngle(flower);
+        int size = (int) Math.round(geometry.flowerSize() * scale);
+        if (size <= 0) return;
+
+        var oldTransform = g2.getTransform();
+        g2.translate(pos.x, pos.y);
+        g2.rotate(angle);
+        GameAssets.drawFit(g2, GameAssets.flower(flower.getColor()), 0, 0, size);
+        g2.setTransform(oldTransform);
+    }
+
+    private void drawFlyingFlower(Graphics2D g2, ResolutionAnimator.ResolutionPhase phase, ResolutionAnimator.ResolutionStep step) {
+        java.awt.Window win = SwingUtilities.getWindowAncestor(component);
+        PlayerPanel targetPanel = null;
+        if (win instanceof MainFrame frame) {
+            if (phase.player().getIndex() == 0) {
+                targetPanel = frame.getPanelTop();
+            } else {
+                targetPanel = frame.getPanelBottom();
+            }
+        }
+
+        Point targetPos = getScoreItemCenter(targetPanel, step.flower().getColor());
+        float vanish = resolution.vanishProgress(); // 0.0 to 1.0
+        double eased = AnimationMath.smooth(vanish);
+
+        double x = step.flowerX() + (targetPos.x - step.flowerX()) * eased;
+        double y = step.flowerY() + (targetPos.y - step.flowerY()) * eased;
+
+        double startSize = geometry.flowerSize();
+        double endSize = 22.0; // matching ICON_SIZE in PlayerPanel
+        double size = startSize + (endSize - startSize) * eased;
+
+        double angle = eased * Math.PI * 2.0;
+
+        var oldTransform = g2.getTransform();
+        g2.translate(x, y);
+        g2.rotate(angle);
+        GameAssets.drawFit(g2, GameAssets.flower(step.flower().getColor()), 0, 0, (int) Math.round(size));
+        g2.setTransform(oldTransform);
+    }
+
+    private Point getScoreItemCenter(PlayerPanel playerPanel, FlowerColor color) {
+        if (playerPanel == null) {
+            return new Point(component.getWidth() / 2, component.getHeight() / 2);
+        }
+        
+        JPanel scoreTabPanel = null;
+        for (Component child : playerPanel.getComponents()) {
+            if (child instanceof JPanel panel && panel.getLayout() instanceof java.awt.GridLayout) {
+                if (panel.getComponentCount() == FlowerColor.values().length) {
+                    scoreTabPanel = panel;
+                    break;
+                }
+            }
+        }
+        
+        if (scoreTabPanel != null) {
+            int index = color.ordinal();
+            if (index >= 0 && index < scoreTabPanel.getComponentCount()) {
+                Component scoreItem = scoreTabPanel.getComponent(index);
+                int sx = scoreItem.getX() + scoreItem.getWidth() / 2;
+                int sy = scoreItem.getY() + scoreItem.getHeight() / 2;
+                
+                Point p = new Point(sx, sy);
+                return SwingUtilities.convertPoint(scoreTabPanel, p, component);
+            }
+        }
+        
+        Point p = new Point(playerPanel.getWidth() / 2, playerPanel.getHeight() / 2);
+        return SwingUtilities.convertPoint(playerPanel, p, component);
+    }
+
+    private void drawCylinder(Graphics2D g2) {
+        BufferedImage img = GameAssets.lacunaCylinder();
+        if (img == null) return;
+
+        Point.Double pos = cylinderIntro.getCylinderPosition();
+        double angle = cylinderIntro.getCylinderTiltAngle();
+
+        int width = (int) Math.round(Math.min(component.getWidth(), component.getHeight()) * 0.38);
+        if (width <= 0) width = 180;
+        int height = (int) Math.round(width * img.getHeight() / (double) img.getWidth());
+
+        var oldTransform = g2.getTransform();
+        g2.translate(pos.x, pos.y);
+        g2.rotate(angle);
+        g2.drawImage(img, -width / 2, -height / 2, width, height, null);
+        g2.setTransform(oldTransform);
+    }
+
+    private void drawLandingRipples(Graphics2D g2) {
+        Composite oldComposite = g2.getComposite();
+
+        if (cylinderIntro.active()) {
+            for (Flower flower : model.getFleurs()) {
+                if (flower.isOnBoard()) {
+                    double progress = cylinderIntro.getFlowerRippleProgress(flower);
+                    if (progress >= 0.0 && progress <= 1.0) {
+                        drawRipple(g2, geometry.toScreenX(flower.getX()), geometry.toScreenY(flower.getY()), progress, flower.getColor());
+                    }
+                }
+            }
+        }
+
+        if (placement.active()) {
+            double progress = placement.getFlowerRippleProgress();
+            if (progress >= 0.0 && progress <= 1.0) {
+                PlacementAnimator.PlacementAnimation anim = placement.animation();
+                if (anim != null) {
+                    drawRipple(g2, geometry.toScreenX(anim.firstFlower().getX()), geometry.toScreenY(anim.firstFlower().getY()), progress, anim.firstFlower().getColor());
+                    drawRipple(g2, geometry.toScreenX(anim.secondFlower().getX()), geometry.toScreenY(anim.secondFlower().getY()), progress, anim.secondFlower().getColor());
+                }
+            }
+        }
+
+        g2.setComposite(oldComposite);
+    }
+
+    private void drawRipple(Graphics2D g2, int cx, int cy, double progress, FlowerColor color) {
+        double startRadius = geometry.flowerSize() * 0.4;
+        double endRadius = geometry.flowerSize() * 1.5;
+        int radius = (int) Math.round(startRadius + (endRadius - startRadius) * progress);
+
+        float alpha = (float) (1.0 - progress);
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha * 0.55f));
+
+        Color baseColor = Theme.getColor(color);
+        g2.setColor(baseColor);
+        g2.setStroke(new BasicStroke(2.0f + (float) (1.5f * (1.0 - progress))));
+        g2.drawOval(cx - radius, cy - radius, radius * 2, radius * 2);
     }
 
     private record ElementOnBoard(Object item, double y) {

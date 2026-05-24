@@ -25,6 +25,7 @@ public final class GameAssets {
     private static final BufferedImage LETS_PLAY = load("lets_play.png");
     private static final BufferedImage HOLD_UP = load("hold_up.png");
     private static final BufferedImage GAME_OVER = load("game_over.png");
+    private static final BufferedImage LACUNA_CYLINDER = load("lacuna_cylinder.png");
 
     private GameAssets() {
     }
@@ -60,6 +61,12 @@ public final class GameAssets {
     public static BufferedImage gameOver() {
         return GAME_OVER;
     }
+
+    public static BufferedImage lacunaCylinder() {
+        return LACUNA_CYLINDER;
+    }
+
+
 
     public static ImageIcon icon(BufferedImage image, int size) {
         if (image == null) {
