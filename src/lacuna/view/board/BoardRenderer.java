@@ -9,6 +9,7 @@ import lacuna.view.GameAssets;
 import lacuna.view.Theme;
 import lacuna.view.PlayerPanel;
 import lacuna.view.MainFrame;
+import lacuna.view.BoardPanel;
 
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
@@ -75,6 +76,7 @@ public final class BoardRenderer {
         drawElements(g2, null, hoveredFlower);
         drawPlacementFlowerAnimation(g2);
         drawResolutionPhase(g2);
+        drawWinningCounterAnimation(g2);
         wordSplash.paint(g2);
 
         if (cylinderIntro.active()) {
@@ -570,5 +572,94 @@ public final class BoardRenderer {
     }
 
     private record ElementOnBoard(Object item, double y) {
+    }
+
+    private void drawWinningCounterAnimation(Graphics2D g2) {
+        float winProgress = 0f;
+        if (component instanceof BoardPanel bp) {
+            winProgress = bp.getWinAnimProgress();
+        }
+        if (winProgress <= 0f) return;
+
+        Player winner = model.getVainqueur();
+        if (winner == null) return;
+
+        java.awt.Window win = SwingUtilities.getWindowAncestor(component);
+        PlayerPanel winnerPanel = null;
+        if (win instanceof MainFrame frame) {
+            if (winner.getIndex() == 0) {
+                winnerPanel = frame.getPanelTop();
+            } else {
+                winnerPanel = frame.getPanelBottom();
+            }
+        }
+        if (winnerPanel == null) return;
+
+        float eased = AnimationMath.smooth(winProgress);
+
+        int cx = component.getWidth() / 2;
+        int cy = component.getHeight() / 2 - 30;
+
+        Point pawnStart = getPawnLabelCenter(winnerPanel);
+        int px = (int) (pawnStart.x + (cx - pawnStart.x) * eased);
+        int py = (int) (pawnStart.y + (cy - pawnStart.y) * eased);
+        int pawnSize = geometry.pawnSize();
+        int currentPawnSize = (int) (22.0 + (pawnSize - 22.0) * eased);
+        GameAssets.drawFit(g2, GameAssets.pawn(winner.getIndex()), px, py, currentPawnSize);
+
+        java.util.Map<FlowerColor, Integer> majorites = model.calculerMajoritesCouleurs();
+        java.util.List<FlowerColor> capturedColors = new java.util.ArrayList<>();
+        for (FlowerColor color : FlowerColor.values()) {
+            Integer ownerIndex = majorites.get(color);
+            if (ownerIndex != null && ownerIndex == winner.getIndex()) {
+                capturedColors.add(color);
+            }
+        }
+
+        int N = capturedColors.size();
+        int flowerSize = geometry.flowerSize();
+        for (int j = 0; j < N; j++) {
+            FlowerColor color = capturedColors.get(j);
+            Point flowerStart = getScoreItemCenter(winnerPanel, color);
+
+            double angle = j * 2.0 * Math.PI / (N == 0 ? 1 : N);
+            double radius = 45.0;
+            int tx = cx + (int) (radius * Math.cos(angle));
+            int ty = cy + (int) (radius * Math.sin(angle));
+
+            int fx = (int) (flowerStart.x + (tx - flowerStart.x) * eased);
+            int fy = (int) (flowerStart.y + (ty - flowerStart.y) * eased);
+            int currentFlowerSize = (int) (22.0 + (flowerSize - 22.0) * eased);
+
+            GameAssets.drawFit(g2, GameAssets.flower(color), fx, fy, currentFlowerSize);
+        }
+    }
+
+    private Point getPawnLabelCenter(PlayerPanel playerPanel) {
+        if (playerPanel == null) {
+            return new Point(component.getWidth() / 2, component.getHeight() / 2);
+        }
+        
+        JPanel playerTabPanel = null;
+        for (Component child : playerPanel.getComponents()) {
+            if (child instanceof JPanel panel && panel.getLayout() instanceof java.awt.GridLayout) {
+                if (panel.getComponentCount() == 2) {
+                    playerTabPanel = panel;
+                    break;
+                }
+            }
+        }
+        
+        if (playerTabPanel != null) {
+            Component pawnLabelComp = playerTabPanel.getComponent(1);
+            int sx = pawnLabelComp.getX() + pawnLabelComp.getWidth() / 2;
+            int sy = pawnLabelComp.getY() + pawnLabelComp.getHeight() / 2;
+            
+            Point p = new Point(sx, sy);
+            return SwingUtilities.convertPoint(playerTabPanel, p, component);
+        }
+        
+        Point p = new Point(playerPanel.getWidth() / 2, playerPanel.getHeight() / 2);
+        return SwingUtilities.convertPoint(playerPanel, p, component);
     }
 }

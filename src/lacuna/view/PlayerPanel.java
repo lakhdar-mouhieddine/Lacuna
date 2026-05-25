@@ -31,6 +31,7 @@ public class PlayerPanel extends JPanel implements ModelListener {
     private Timer auraTimer;
     private long auraStartedAt;
     private float auraPulse;
+    private float alpha = 1.0f;
 
     public PlayerPanel(GameModel model, Player player, boolean isLeft) {
         this.model = model;
@@ -314,5 +315,23 @@ public class PlayerPanel extends JPanel implements ModelListener {
  
             g2.dispose();
         }
+    }
+
+    public void setAlpha(float alpha) {
+        this.alpha = alpha;
+        repaint();
+    }
+
+    @Override
+    public void paint(Graphics g) {
+        if (alpha <= 0.0f) return;
+        if (alpha >= 1.0f) {
+            super.paint(g);
+            return;
+        }
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+        super.paint(g2);
+        g2.dispose();
     }
 }
