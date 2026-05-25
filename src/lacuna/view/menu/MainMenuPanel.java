@@ -31,14 +31,28 @@ public class MainMenuPanel extends JPanel {
     private final BufferedImage blueFlower = MenuAssets.load("main_men_blue.png");
     private final BufferedImage pinkFlower = MenuAssets.load("main_men_pink.png");
 
-    private final BiConsumer<String, String> onLocalPlay;
-    private final BiConsumer<String, String> onAiPlay;
-    private final BiConsumer<String, String> onAiVsAiPlay;
+    public interface LocalPlayCallback {
+        void accept(String nom1, String nom2);
+    }
+
+    public interface AiPlayCallback {
+        void accept(String nomJoueur, String niveau);
+    }
+
+    public interface AiVsAiPlayCallback {
+        void accept(String level1, String level2);
+    }
+
+    private final LocalPlayCallback onLocalPlay;
+    private final AiPlayCallback onAiPlay;
+    private final AiVsAiPlayCallback onAiVsAiPlay;
+    private final Runnable onLoadPlay;
     private final Consumer<OnlineSessionConnection> onFriendSessionJoined;
     private final Consumer<OnlineSessionConnection> onCreatedSessionJoined;
     private final SegmentedChoice modeSelect;
     private final JPanel modeFields;
     private final PrimaryButton playButton;
+    private final SecondaryButton loadGameButton;
     private final LacunaServerClient serverClient;
 
     private ToggleSwitch aiVsAiSwitch;
@@ -77,19 +91,25 @@ public class MainMenuPanel extends JPanel {
     private SwingWorker<PeerJoinResult, Void> peerWaitWorker;
 
     public MainMenuPanel(
-            BiConsumer<String, String> onLocalPlay,
-            BiConsumer<String, String> onAiPlay,
-            BiConsumer<String, String> onAiVsAiPlay,
+            LocalPlayCallback onLocalPlay,
+            AiPlayCallback onAiPlay,
+            AiVsAiPlayCallback onAiVsAiPlay,
+            Runnable onLoadPlay,
             Consumer<OnlineSessionConnection> onFriendSessionJoined,
             Consumer<OnlineSessionConnection> onCreatedSessionJoined) {
         this.onLocalPlay = onLocalPlay;
         this.onAiPlay = onAiPlay;
         this.onAiVsAiPlay = onAiVsAiPlay;
+        this.onLoadPlay = onLoadPlay;
         this.onFriendSessionJoined = onFriendSessionJoined;
         this.onCreatedSessionJoined = onCreatedSessionJoined;
         this.modeSelect = new SegmentedChoice(MODE_NORMAL, MODE_AI, MODE_ONLINE);
         this.modeFields = MenuTheme.verticalPanel();
         this.playButton = new PrimaryButton("Jouer Lacuna");
+        this.loadGameButton = new SecondaryButton("Charger une partie");
+        this.loadGameButton.addActionListener((ActionEvent e) -> {
+            onLoadPlay.run();
+        });
         this.serverClient = new LacunaServerClient();
 
         setLayout(new BorderLayout());
@@ -147,6 +167,8 @@ public class MainMenuPanel extends JPanel {
         controls.add(modeFields);
         controls.add(Box.createVerticalStrut(28));
         controls.add(playButton);
+        controls.add(Box.createVerticalStrut(12));
+        controls.add(loadGameButton);
         controls.add(Box.createVerticalGlue());
 
         return controls;
@@ -175,6 +197,7 @@ public class MainMenuPanel extends JPanel {
 
         JTextField playerOne = MenuTheme.textField("Joueur 1");
         JTextField playerTwo = MenuTheme.textField("Joueur 2");
+
         addLabeledField("Nom du joueur 1", playerOne);
         addLabeledField("Nom du joueur 2", playerTwo);
 
@@ -587,6 +610,9 @@ public class MainMenuPanel extends JPanel {
         if (cancelCreatedSessionButton != null) {
             cancelCreatedSessionButton.setEnabled(waitingForCreatedPeer);
         }
+        if (loadGameButton != null && playButton != null) {
+            loadGameButton.setEnabled(playButton.isEnabled());
+        }
     }
 
     private void joinFriendSession() {
@@ -866,6 +892,10 @@ public class MainMenuPanel extends JPanel {
     }
 
     private void refreshFields() {
+        if (loadGameButton != null && playButton != null) {
+            loadGameButton.setVisible(playButton.isVisible());
+            loadGameButton.setEnabled(playButton.isEnabled());
+        }
         modeFields.revalidate();
         modeFields.repaint();
         revalidate();

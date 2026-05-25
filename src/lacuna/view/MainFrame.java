@@ -9,6 +9,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.*;
 
 public class MainFrame extends JFrame {
     private static final Integer TURN_GLOW_LAYER = JLayeredPane.DEFAULT_LAYER + 50;
@@ -63,6 +64,7 @@ public class MainFrame extends JFrame {
                 this::demarrerPartieLocale,
                 this::demarrerPartieAvecIA,
                 this::demarrerPartieAiVsAi,
+                this::chargerPartie,
                 this::afficherSessionRejointe,
                 this::afficherSessionCreee);
 
@@ -74,7 +76,7 @@ public class MainFrame extends JFrame {
     private void demarrerPartieLocale(String nom1, String nom2) {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
-        construireInterface(nom1, nom2, false, 0, false, 0, null, -1);
+        construireInterface(nom1, nom2, false, 0, false, 0, 0, null, -1);
     }
 
     private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
@@ -89,7 +91,7 @@ public class MainFrame extends JFrame {
             depth = 5;
             iaName = "IA (Difficile)";
         }
-        construireInterface(iaName, nomJoueur, true, depth, false, 0, null, -1);
+        construireInterface(iaName, nomJoueur, true, depth, false, 0, 0, null, -1);
     }
 
     private void demarrerPartieAiVsAi(String level1, String level2) {
@@ -114,7 +116,7 @@ public class MainFrame extends JFrame {
             depth2 = 5;
             ia2Name = "IA 2 (Difficile)";
         }
-        construireInterface(ia1Name, ia2Name, true, depth1, true, depth2, null, -1);
+        construireInterface(ia1Name, ia2Name, true, depth1, true, depth2, 0, null, -1);
     }
 
     private void afficherSessionRejointe(OnlineSessionConnection sessionConnection) {
@@ -139,7 +141,7 @@ public class MainFrame extends JFrame {
         String nom2 = isHost ? "Adversaire" : myName;
         int localPlayerIndex = isHost ? 0 : 1;
 
-        construireInterface(nom1, nom2, false, 0, false, 0, sessionConnection, localPlayerIndex);
+        construireInterface(nom1, nom2, false, 0, false, 0, 0, sessionConnection, localPlayerIndex);
     }
 
     private void fermerSessionEnLigneActuelle() {
@@ -164,21 +166,25 @@ public class MainFrame extends JFrame {
     }
 
     private void construireInterface(String nom1, String nom2, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
+            int startingPlayerIndex, OnlineSessionConnection networkSession, int localPlayerIndex) {
+        GameModel modele;
+        if (networkSession != null) {
+            long seed = networkSession.getSessionId().hashCode() + onlineGameCount;
+            modele = new GameModel(nom1, nom2, 0, seed);
+        } else {
+            modele = new GameModel(nom1, nom2, 0, new java.util.Random().nextLong(), true);
+        }
+        initialiserInterface(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth, networkSession, localPlayerIndex);
+    }
+
+    private void initialiserInterface(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
             OnlineSessionConnection networkSession, int localPlayerIndex) {
-        this.lastNom1 = nom1;
-        this.lastNom2 = nom2;
+        this.lastNom1 = modele.getJoueurs()[0].getName();
+        this.lastNom2 = modele.getJoueurs()[1].getName();
         this.lastP1IsAi = p1IsAi;
         this.lastP1AiDepth = p1AiDepth;
         this.lastP2IsAi = p2IsAi;
         this.lastP2AiDepth = p2AiDepth;
-
-        GameModel modele;
-        if (networkSession != null) {
-            long seed = networkSession.getSessionId().hashCode() + onlineGameCount;
-            modele = new GameModel(nom1, nom2, seed);
-        } else {
-            modele = new GameModel(nom1, nom2);
-        }
 
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
@@ -193,17 +199,31 @@ public class MainFrame extends JFrame {
         JButton quitButton = createQuitButton();
         JButton helpButton = createHelpButton();
 
-        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
-        topBar.setOpaque(false);
-        topBar.add(helpButton);
-        topBar.add(undoButton);
-        topBar.add(quitButton);
+        JPanel topLeftBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        topLeftBar.setOpaque(false);
+        if (networkSession == null) {
+            JButton saveButton = createSaveButton(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth);
+            JButton loadButton = createLoadButton();
+            topLeftBar.add(saveButton);
+            topLeftBar.add(loadButton);
+        }
+
+        JPanel topRightBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+        topRightBar.setOpaque(false);
+        topRightBar.add(helpButton);
+        topRightBar.add(undoButton);
+        topRightBar.add(quitButton);
+
+        JPanel headerBar = new JPanel(new BorderLayout());
+        headerBar.setOpaque(false);
+        headerBar.add(topLeftBar, BorderLayout.WEST);
+        headerBar.add(topRightBar, BorderLayout.EAST);
 
         JPanel hud = new JPanel(new BorderLayout());
         hud.setOpaque(false);
         hud.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
 
-        hud.add(topBar, BorderLayout.NORTH);
+        hud.add(headerBar, BorderLayout.NORTH);
         hud.add(panelTop, BorderLayout.WEST);
         hud.add(panelBottom, BorderLayout.EAST);
 
@@ -228,6 +248,106 @@ public class MainFrame extends JFrame {
         setContentPane(gameRoot);
         revalidate();
         repaint();
+    }
+
+    private JButton createSaveButton(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth) {
+        JButton btn = new JButton("SAUVEGARDER") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(new Color(66, 135, 245, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(new Color(255, 255, 255, 40));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btn.setForeground(new Color(220, 220, 230));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(120, 32));
+        btn.addActionListener(e -> sauvegarderPartie(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth));
+        return btn;
+    }
+
+    private JButton createLoadButton() {
+        JButton btn = new JButton("CHARGER") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(new Color(104, 214, 132, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(new Color(255, 255, 255, 40));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btn.setForeground(new Color(220, 220, 230));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setPreferredSize(new Dimension(120, 32));
+        btn.addActionListener(e -> chargerPartie());
+        return btn;
+    }
+
+    private void sauvegarderPartie(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth) {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Sauvegarder la partie");
+        fileChooser.setSelectedFile(new java.io.File("sauvegarde_lacuna.dat"));
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            java.io.File file = fileChooser.getSelectedFile();
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
+                lacuna.model.SaveState state = new lacuna.model.SaveState(
+                    modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth,
+                    modele.getJoueurs()[0].getName(), modele.getJoueurs()[1].getName()
+                );
+                oos.writeObject(state);
+                JOptionPane.showMessageDialog(this, "Partie sauvegardée avec succès !", "Sauvegarde", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erreur lors de la sauvegarde : " + ex.getMessage(), "Erreur", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void chargerPartie() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Charger une partie");
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            java.io.File file = fileChooser.getSelectedFile();
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                lacuna.model.SaveState state = (lacuna.model.SaveState) ois.readObject();
+                initialiserInterface(state.model, state.p1IsAi, state.p1AiDepth, state.p2IsAi, state.p2AiDepth, null, -1);
+                JOptionPane.showMessageDialog(this, "Partie chargée avec succès !", "Chargement", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erreur lors du chargement : " + ex.getMessage(), "Erreur", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     public void afficherTutoriel() {
@@ -263,9 +383,9 @@ public class MainFrame extends JFrame {
     public void relancerPartie() {
         if (isOnlineSession && onlineSessionConnection != null) {
             onlineGameCount++;
-            construireInterface(lastNom1, lastNom2, false, 0, false, 0, onlineSessionConnection, lastIsHost ? 0 : 1);
+            construireInterface(lastNom1, lastNom2, false, 0, false, 0, 0, onlineSessionConnection, lastIsHost ? 0 : 1);
         } else if (lastNom1 != null) {
-            construireInterface(lastNom1, lastNom2, lastP1IsAi, lastP1AiDepth, lastP2IsAi, lastP2AiDepth, null, -1);
+            construireInterface(lastNom1, lastNom2, lastP1IsAi, lastP1AiDepth, lastP2IsAi, lastP2AiDepth, 0, null, -1);
         } else {
             afficherMenu();
         }

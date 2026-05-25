@@ -1,6 +1,7 @@
 package lacuna.model;
 
-public class Pawn {
+public class Pawn implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     private final Player owner;
     private double x, y;
     private boolean placed;

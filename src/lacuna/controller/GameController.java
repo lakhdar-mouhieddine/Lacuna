@@ -327,4 +327,14 @@ public class GameController {
             SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
         }
     }
+
+    public boolean isLocalMatch() {
+        return networkSession == null;
+    }
+
+    public void demarrerPartieAvecStarter(int starterIndex) {
+        model.setStartingPlayer(starterIndex);
+        boardPanel.afficherToastTour();
+        declencherCoupIASiNecessaire();
+    }
 }

@@ -139,8 +139,19 @@ public class BoardPanel extends JPanel implements ModelListener {
     public void addNotify() {
         super.addNotify();
         cylinderIntro.start(geometry, () -> {
-            if (controller != null) {
-                controller.declencherCoupIASiNecessaire();
+            if (controller != null && controller.isLocalMatch() && model.estNouvellePartieNonCommencee()) {
+                JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                String name1 = model.getJoueurs()[0].getName();
+                String name2 = model.getJoueurs()[1].getName();
+                int starterIndex = StartingPlayerDialog.show(frame, name1, name2);
+                if (starterIndex == -1) {
+                    starterIndex = 0;
+                }
+                controller.demarrerPartieAvecStarter(starterIndex);
+            } else {
+                if (controller != null) {
+                    controller.declencherCoupIASiNecessaire();
+                }
             }
         });
     }
@@ -336,6 +347,13 @@ public class BoardPanel extends JPanel implements ModelListener {
         if (model.getPhase() == GameModel.GamePhase.PLACING
                 && (controller == null || !controller.isAiTurn())) {
             boolean isPlayer1 = model.getJoueurCourant().getIndex() == 0;
+            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", false);
+        }
+    }
+
+    public void afficherToastTour() {
+        if (model.getPhase() == GameModel.GamePhase.PLACING
+                && (controller == null || !controller.isAiTurn())) {
             toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", false);
         }
     }
