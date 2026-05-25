@@ -7,11 +7,15 @@ import lacuna.model.Pawn;
 import lacuna.model.Player;
 import lacuna.model.AI.AIMove;
 import lacuna.model.AI.Minimax;
+import lacuna.network.OnlineGameChannel;
+import lacuna.network.OnlineGameMessage;
+import lacuna.network.OnlineMove;
 import lacuna.view.BoardPanel;
 import lacuna.view.GameResultDialog;
 import lacuna.view.MainFrame;
 
 import javax.swing.*;
+import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,26 +28,25 @@ public class GameController {
     private final BoardPanel boardPanel;
     private final int aiPlayerIndex;
     private final int aiDepth;
-    private final lacuna.network.OnlineSessionConnection networkSession;
+    private final OnlineGameChannel onlineChannel;
     private final int localPlayerIndex;
-    private SwingWorker<Void, List<String>> networkWorker;
-    private boolean localWantsRematch = false;
-    private boolean opponentWantsRematch = false;
+    private SwingWorker<Void, OnlineGameMessage> networkWorker;
 
     private boolean aiThinking = false;
     private Timer aiTimer;
     private SwingWorker<AIMove, Void> aiWorker;
 
-    public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, int aiPlayerIndex, int aiDepth, lacuna.network.OnlineSessionConnection networkSession, int localPlayerIndex) {
+    public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, int aiPlayerIndex,
+            int aiDepth, OnlineGameChannel onlineChannel, int localPlayerIndex) {
         this.model = model;
         this.mainFrame = mainFrame;
         this.boardPanel = boardPanel;
         this.aiPlayerIndex = aiPlayerIndex;
         this.aiDepth = aiDepth;
-        this.networkSession = networkSession;
+        this.onlineChannel = onlineChannel;
         this.localPlayerIndex = localPlayerIndex;
         
-        if (networkSession != null) {
+        if (onlineChannel != null) {
             startNetworkListener();
         }
     }
@@ -54,10 +57,7 @@ public class GameController {
             protected Void doInBackground() throws Exception {
                 while (!isCancelled()) {
                     try {
-                        List<String> data = networkSession.receiveData();
-                        if (data != null && !data.isEmpty()) {
-                            publish(data);
-                        }
+                        publish(onlineChannel.receiveMessage());
                     } catch (java.io.IOException e) {
                         if (!isCancelled()) {
                             e.printStackTrace();
@@ -69,25 +69,20 @@ public class GameController {
             }
 
             @Override
-            protected void process(List<List<String>> chunks) {
-                for (List<String> data : chunks) {
-                    if (data.size() == 1 && data.get(0).equals("REMATCH")) {
-                        opponentWantsRematch = true;
-                        if (localWantsRematch) {
-                            SwingUtilities.invokeLater(mainFrame::relancerPartie);
-                        }
-                    } else {
-                        traiterCoupReseau(data);
+            protected void process(List<OnlineGameMessage> chunks) {
+                for (OnlineGameMessage message : chunks) {
+                    if (message.getType() == OnlineGameMessage.Type.MOVE) {
+                        traiterCoupReseau(message.getMove());
                     }
                 }
             }
             
             @Override
             protected void done() {
-                if (localWantsRematch && !opponentWantsRematch) {
-                    JOptionPane.showMessageDialog(mainFrame, "L'adversaire a refuse la revanche ou a quitte la partie.", "Deconnexion", JOptionPane.WARNING_MESSAGE);
-                    mainFrame.retourMenuPrincipal();
-                } else if (model.getVainqueur() == null && model.getPhase() != GameModel.GamePhase.RESOLVING && !localWantsRematch) {
+                if (isCancelled()) {
+                    return;
+                }
+                if (model.getVainqueur() == null && model.getPhase() != GameModel.GamePhase.RESOLVING) {
                     JOptionPane.showMessageDialog(mainFrame, "L'adversaire a quitte la partie.", "Deconnexion", JOptionPane.WARNING_MESSAGE);
                     mainFrame.retourMenuPrincipal();
                 }
@@ -96,16 +91,40 @@ public class GameController {
         networkWorker.execute();
     }
 
-    private void traiterCoupReseau(List<String> data) {
-        if (data.size() < 4) return;
+    public void arreter() {
+        if (networkWorker != null) {
+            networkWorker.cancel(true);
+        }
+        if (aiTimer != null) {
+            aiTimer.stop();
+        }
+        if (aiWorker != null) {
+            aiWorker.cancel(true);
+        }
+        aiThinking = false;
+    }
+
+    private void traiterCoupReseau(OnlineMove move) {
+        if (move == null || model.getJoueurCourant().getIndex() == localPlayerIndex) {
+            return;
+        }
+
         try {
-            int f1Index = Integer.parseInt(data.get(0));
-            int f2Index = Integer.parseInt(data.get(1));
-            double posX = Double.parseDouble(data.get(2));
-            double posY = Double.parseDouble(data.get(3));
+            int f1Index = move.getFirstFlowerIndex();
+            int f2Index = move.getSecondFlowerIndex();
+            double posX = move.getPawnX();
+            double posY = move.getPawnY();
+            if (f1Index < 0 || f1Index >= model.getFleurs().size()
+                    || f2Index < 0 || f2Index >= model.getFleurs().size()
+                    || !Double.isFinite(posX) || !Double.isFinite(posY)) {
+                return;
+            }
             
             Flower f1 = model.getFleurs().get(f1Index);
             Flower f2 = model.getFleurs().get(f2Index);
+            if (!model.estLigneValide(f1, f2) || !isRemotePawnPositionValid(f1, f2, posX, posY)) {
+                return;
+            }
             
             Pawn pionLibre = null;
             for (Pawn pw : model.getJoueurCourant().getPawns()) {
@@ -113,15 +132,24 @@ public class GameController {
             }
             final Pawn finalPionLibre = pionLibre;
             
-            boardPanel.montrerIntentionIA(f1, f2, posX, posY, () -> {
+            boardPanel.montrerIntentionPlacement(f1, f2, posX, posY, () -> {
                 boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
                 if (success && finalPionLibre != null) {
-                    boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
+                    boardPanel.jouerAnimationPionDistant(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
                 }
             });
-        } catch (NumberFormatException e) {
+        } catch (RuntimeException e) {
             e.printStackTrace();
         }
+    }
+
+    private boolean isRemotePawnPositionValid(Flower f1, Flower f2, double posX, double posY) {
+        if (!Double.isFinite(posX) || !Double.isFinite(posY)) {
+            return false;
+        }
+
+        Line2D.Double segment = new Line2D.Double(f1.getX(), f1.getY(), f2.getX(), f2.getY());
+        return segment.ptSegDist(posX, posY) <= GameModel.HITBOX_RADIUS;
     }
 
     public boolean isAiMode() {
@@ -136,21 +164,23 @@ public class GameController {
         return aiThinking;
     }
 
+    public boolean isLocalInputBlocked() {
+        if (onlineChannel != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
+            return true;
+        }
+        return isAiTurn() || aiThinking;
+    }
+
     public boolean onPlacementValid(Flower f1, Flower f2, double posX, double posY) {
-        if (networkSession != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
+        if (onlineChannel != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
             return false;
         }
         
         boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
-        if (success && networkSession != null) {
+        if (success && onlineChannel != null) {
             int f1Index = model.getFleurs().indexOf(f1);
             int f2Index = model.getFleurs().indexOf(f2);
-            List<String> data = new ArrayList<>();
-            data.add(String.valueOf(f1Index));
-            data.add(String.valueOf(f2Index));
-            data.add(String.valueOf(posX));
-            data.add(String.valueOf(posY));
-            networkSession.sendData(data);
+            onlineChannel.sendMove(new OnlineMove(f1Index, f2Index, posX, posY));
         }
         return success;
     }
@@ -170,7 +200,7 @@ public class GameController {
     }
 
     public void annulerCoup() {
-        if (networkSession != null) return;
+        if (onlineChannel != null) return;
         if (model.getPhase() != GameModel.GamePhase.PLACING) return;
         if (!model.peutAnnuler()) return;
 
@@ -270,7 +300,7 @@ public class GameController {
         
         final Pawn finalPionLibre = pionLibre;
 
-        boardPanel.montrerIntentionIA(f1, f2, move.pawnX, move.pawnY, () -> {
+        boardPanel.montrerIntentionPlacement(f1, f2, move.pawnX, move.pawnY, () -> {
             boolean success = model.placerPionEtCapturer(f1, f2, move.pawnX, move.pawnY);
             if (success && finalPionLibre != null) {
                 boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
@@ -300,17 +330,11 @@ public class GameController {
         );
 
         if (choix == GameResultDialog.Choice.REPLAY) {
-            if (networkSession != null) {
-                List<String> msg = new ArrayList<>();
-                msg.add("REMATCH");
-                networkSession.sendData(msg);
-                
-                localWantsRematch = true;
-                if (opponentWantsRematch) {
-                    SwingUtilities.invokeLater(mainFrame::relancerPartie);
-                } else {
-                    SwingUtilities.invokeLater(mainFrame::afficherAttenteRematch);
-                }
+            if (onlineChannel != null) {
+                JOptionPane.showMessageDialog(mainFrame,
+                    "La revanche en ligne sera ajoutee dans une prochaine etape.",
+                    "Revanche indisponible", JOptionPane.INFORMATION_MESSAGE);
+                SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
             } else {
                 SwingUtilities.invokeLater(mainFrame::relancerPartie);
             }

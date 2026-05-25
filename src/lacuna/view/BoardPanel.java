@@ -66,8 +66,8 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     private List<FlowerPair> candidatePairs = new ArrayList<>();
     private int selectedPairIndex = 0;
-    private boolean showingAiIntention = false;
-    private Point aiIntentionPoint = null;
+    private boolean showingPlacementIntention = false;
+    private Point placementIntentionPoint = null;
     private FlowerPair lastPhantomPair = null;
 
     public BoardPanel(GameModel model) {
@@ -190,7 +190,7 @@ public class BoardPanel extends JPanel implements ModelListener {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
         GameAssets.prepare(g2);
-        Point effectiveMousePoint = showingAiIntention ? aiIntentionPoint : ((isInputBlocked() || (controller != null && controller.isAiTurn())) ? null : mousePoint);
+        Point effectiveMousePoint = showingPlacementIntention ? placementIntentionPoint : (isInputBlocked() ? null : mousePoint);
         renderer.paint(g2, candidatePairs, selectedPairIndex, hoveredFlower, effectiveMousePoint, lastPhantomPair);
         toast.paint(g2);
         g2.dispose();
@@ -198,8 +198,7 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     private void updateHover(int x, int y) {
         updateCursor();
-        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
-                || (controller != null && controller.isAiTurn())) {
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING) {
             return;
         }
 
@@ -210,7 +209,6 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     private void updateCursor() {
         boolean shouldHide = !(isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING
-                || (controller != null && controller.isAiTurn())
                 || mousePoint == null);
 
         if (shouldHide && mousePoint != null) {
@@ -289,8 +287,7 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     private void handleClick(int x, int y, int button) {
-        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null
-                || controller.isAiTurn()) {
+        if (isInputBlocked() || model.getPhase() != GameModel.GamePhase.PLACING || controller == null) {
             return;
         }
 
@@ -334,7 +331,7 @@ public class BoardPanel extends JPanel implements ModelListener {
             controller.onPlacementAnimationFinished();
         }
         if (model.getPhase() == GameModel.GamePhase.PLACING
-                && (controller == null || !controller.isAiTurn())) {
+                && (controller == null || !controller.isLocalInputBlocked())) {
             boolean isPlayer1 = model.getJoueurCourant().getIndex() == 0;
             toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", false);
         }
@@ -375,23 +372,27 @@ public class BoardPanel extends JPanel implements ModelListener {
 
     private boolean isInputBlocked() {
         return cylinderIntro.active() || placement.active()
-                || (controller != null && (controller.isAiThinking() || controller.isAiTurn()))
+                || (controller != null && controller.isLocalInputBlocked())
                 || model.getPhase() != GameModel.GamePhase.PLACING;
     }
 
     public void montrerIntentionIA(Flower f1, Flower f2, double pawnX, double pawnY, Runnable onFinished) {
+        montrerIntentionPlacement(f1, f2, pawnX, pawnY, onFinished);
+    }
+
+    public void montrerIntentionPlacement(Flower f1, Flower f2, double pawnX, double pawnY, Runnable onFinished) {
         candidatePairs.clear();
         candidatePairs.add(new FlowerPair(f1, f2));
         selectedPairIndex = 0;
         
-        aiIntentionPoint = new Point(geometry.toScreenX(pawnX), geometry.toScreenY(pawnY));
-        showingAiIntention = true;
+        placementIntentionPoint = new Point(geometry.toScreenX(pawnX), geometry.toScreenY(pawnY));
+        showingPlacementIntention = true;
         updateCursor();
         repaint();
 
         Timer timer = new Timer(800, e -> {
-            showingAiIntention = false;
-            aiIntentionPoint = null;
+            showingPlacementIntention = false;
+            placementIntentionPoint = null;
             onFinished.run();
         });
         timer.setRepeats(false);
@@ -399,6 +400,10 @@ public class BoardPanel extends JPanel implements ModelListener {
     }
 
     public void jouerAnimationPionIA(Pawn pawn, Flower f1, Flower f2, Runnable onFinished) {
+        jouerAnimationPionDistant(pawn, f1, f2, onFinished);
+    }
+
+    public void jouerAnimationPionDistant(Pawn pawn, Flower f1, Flower f2, Runnable onFinished) {
         clearSelection();
         lastPhantomPair = new FlowerPair(f1, f2);
         placement.start(pawn, f1, f2, onFinished);
