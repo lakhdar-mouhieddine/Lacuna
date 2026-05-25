@@ -33,12 +33,19 @@ public class MainMenuPanel extends JPanel {
 
     private final BiConsumer<String, String> onLocalPlay;
     private final BiConsumer<String, String> onAiPlay;
+    private final BiConsumer<String, String> onAiVsAiPlay;
     private final Consumer<OnlineSessionConnection> onFriendSessionJoined;
     private final Consumer<OnlineSessionConnection> onCreatedSessionJoined;
     private final SegmentedChoice modeSelect;
     private final JPanel modeFields;
     private final PrimaryButton playButton;
     private final LacunaServerClient serverClient;
+
+    private ToggleSwitch aiVsAiSwitch;
+    private JTextField aiPlayerNameField;
+    private SegmentedChoice aiLevels;
+    private SegmentedChoice ai1Levels;
+    private SegmentedChoice ai2Levels;
 
     private Timer serverStatusTimer;
     private boolean serverStatusCheckRunning;
@@ -72,10 +79,12 @@ public class MainMenuPanel extends JPanel {
     public MainMenuPanel(
             BiConsumer<String, String> onLocalPlay,
             BiConsumer<String, String> onAiPlay,
+            BiConsumer<String, String> onAiVsAiPlay,
             Consumer<OnlineSessionConnection> onFriendSessionJoined,
             Consumer<OnlineSessionConnection> onCreatedSessionJoined) {
         this.onLocalPlay = onLocalPlay;
         this.onAiPlay = onAiPlay;
+        this.onAiVsAiPlay = onAiVsAiPlay;
         this.onFriendSessionJoined = onFriendSessionJoined;
         this.onCreatedSessionJoined = onCreatedSessionJoined;
         this.modeSelect = new SegmentedChoice(MODE_NORMAL, MODE_AI, MODE_ONLINE);
@@ -183,21 +192,76 @@ public class MainMenuPanel extends JPanel {
         cancelCreatedSessionWait(false);
         stopPublicSessionRefreshes();
         stopServerStatusChecks();
+
+        if (aiVsAiSwitch == null) {
+            aiVsAiSwitch = new ToggleSwitch();
+            aiVsAiSwitch.addActionListener(e -> rebuildAiFields());
+        }
+        if (aiPlayerNameField == null) {
+            aiPlayerNameField = MenuTheme.textField("Votre nom");
+        }
+        if (aiLevels == null) {
+            aiLevels = new SegmentedChoice("Facile", "Moyen", "Difficile");
+        }
+        if (ai1Levels == null) {
+            ai1Levels = new SegmentedChoice("Facile", "Moyen", "Difficile");
+        }
+        if (ai2Levels == null) {
+            ai2Levels = new SegmentedChoice("Facile", "Moyen", "Difficile");
+        }
+
+        rebuildAiFields();
+    }
+
+    private JComponent createToggleRow(ToggleSwitch toggle, String text) {
+        JPanel row = new JPanel();
+        row.setOpaque(false);
+        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        row.setMaximumSize(new Dimension(420, 48));
+        row.add(toggle);
+        row.add(Box.createHorizontalStrut(16));
+        row.add(MenuTheme.label(text, 14, MenuTheme.MUTED_TEXT));
+        row.add(Box.createHorizontalGlue());
+        return row;
+    }
+
+    private void rebuildAiFields() {
         modeFields.removeAll();
 
-        JTextField playerName = MenuTheme.textField("Votre nom");
-        SegmentedChoice levels = new SegmentedChoice("Facile", "Moyen", "Difficile");
+        modeFields.add(createToggleRow(aiVsAiSwitch, "Combat d'IA (IA vs IA)"));
+        modeFields.add(Box.createVerticalStrut(10));
 
-        addLabeledField("Votre nom", playerName);
-        addLabeledField("Niveau de l'IA", levels);
-        modeFields.add(Box.createVerticalStrut(8));
+        boolean aiVsAi = aiVsAiSwitch.isSelected();
 
-        playButton.prepare("Jouer contre l'IA", true, true);
-        playButton.addActionListener((ActionEvent e) -> {
-            String nom = valueOrDefault(playerName.getText(), "Joueur");
-            String niveau = levels.selectedValue();
-            onAiPlay.accept(nom, niveau);
-        });
+        for (java.awt.event.ActionListener al : playButton.getActionListeners()) {
+            playButton.removeActionListener(al);
+        }
+
+        if (aiVsAi) {
+            addLabeledField("Niveau de l'IA 1 (Orange)", ai1Levels);
+            addLabeledField("Niveau de l'IA 2 (Bleu)", ai2Levels);
+            modeFields.add(Box.createVerticalStrut(8));
+
+            playButton.prepare("Lancer le combat", true, true);
+            playButton.addActionListener((ActionEvent e) -> {
+                String lvl1 = ai1Levels.selectedValue();
+                String lvl2 = ai2Levels.selectedValue();
+                onAiVsAiPlay.accept(lvl1, lvl2);
+            });
+        } else {
+            addLabeledField("Votre nom", aiPlayerNameField);
+            addLabeledField("Niveau de l'IA", aiLevels);
+            modeFields.add(Box.createVerticalStrut(8));
+
+            playButton.prepare("Jouer contre l'IA", true, true);
+            playButton.addActionListener((ActionEvent e) -> {
+                String nom = valueOrDefault(aiPlayerNameField.getText(), "Joueur");
+                String niveau = aiLevels.selectedValue();
+                onAiPlay.accept(nom, niveau);
+            });
+        }
 
         refreshFields();
     }

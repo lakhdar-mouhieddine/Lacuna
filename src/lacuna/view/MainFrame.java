@@ -20,8 +20,10 @@ public class MainFrame extends JFrame {
     private TutorialOverlay tutorialOverlay;
     private String lastNom1;
     private String lastNom2;
-    private int lastAiPlayerIndex;
-    private int lastAiDepth;
+    private boolean lastP1IsAi;
+    private int lastP1AiDepth;
+    private boolean lastP2IsAi;
+    private int lastP2AiDepth;
     private OnlineSessionConnection onlineSessionConnection;
     private boolean lastIsHost;
     private boolean isOnlineSession;
@@ -60,6 +62,7 @@ public class MainFrame extends JFrame {
         MainMenuPanel menu = new MainMenuPanel(
                 this::demarrerPartieLocale,
                 this::demarrerPartieAvecIA,
+                this::demarrerPartieAiVsAi,
                 this::afficherSessionRejointe,
                 this::afficherSessionCreee);
 
@@ -71,7 +74,7 @@ public class MainFrame extends JFrame {
     private void demarrerPartieLocale(String nom1, String nom2) {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
-        construireInterface(nom1, nom2, -1, 0, null, -1);
+        construireInterface(nom1, nom2, false, 0, false, 0, null, -1);
     }
 
     private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
@@ -86,7 +89,32 @@ public class MainFrame extends JFrame {
             depth = 5;
             iaName = "IA (Difficile)";
         }
-        construireInterface(iaName, nomJoueur, 0, depth, null, -1);
+        construireInterface(iaName, nomJoueur, true, depth, false, 0, null, -1);
+    }
+
+    private void demarrerPartieAiVsAi(String level1, String level2) {
+        fermerSessionEnLigneActuelle();
+        isOnlineSession = false;
+        int depth1 = 1;
+        String ia1Name = "IA 1 (Facile)";
+        if ("Moyen".equalsIgnoreCase(level1)) {
+            depth1 = 2;
+            ia1Name = "IA 1 (Moyen)";
+        } else if ("Difficile".equalsIgnoreCase(level1)) {
+            depth1 = 5;
+            ia1Name = "IA 1 (Difficile)";
+        }
+
+        int depth2 = 1;
+        String ia2Name = "IA 2 (Facile)";
+        if ("Moyen".equalsIgnoreCase(level2)) {
+            depth2 = 2;
+            ia2Name = "IA 2 (Moyen)";
+        } else if ("Difficile".equalsIgnoreCase(level2)) {
+            depth2 = 5;
+            ia2Name = "IA 2 (Difficile)";
+        }
+        construireInterface(ia1Name, ia2Name, true, depth1, true, depth2, null, -1);
     }
 
     private void afficherSessionRejointe(OnlineSessionConnection sessionConnection) {
@@ -111,7 +139,7 @@ public class MainFrame extends JFrame {
         String nom2 = isHost ? "Adversaire" : myName;
         int localPlayerIndex = isHost ? 0 : 1;
 
-        construireInterface(nom1, nom2, -1, 0, sessionConnection, localPlayerIndex);
+        construireInterface(nom1, nom2, false, 0, false, 0, sessionConnection, localPlayerIndex);
     }
 
     private void fermerSessionEnLigneActuelle() {
@@ -135,12 +163,14 @@ public class MainFrame extends JFrame {
         return label;
     }
 
-    private void construireInterface(String nom1, String nom2, int aiPlayerIndex, int aiDepth,
+    private void construireInterface(String nom1, String nom2, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
             OnlineSessionConnection networkSession, int localPlayerIndex) {
         this.lastNom1 = nom1;
         this.lastNom2 = nom2;
-        this.lastAiPlayerIndex = aiPlayerIndex;
-        this.lastAiDepth = aiDepth;
+        this.lastP1IsAi = p1IsAi;
+        this.lastP1AiDepth = p1AiDepth;
+        this.lastP2IsAi = p2IsAi;
+        this.lastP2AiDepth = p2AiDepth;
 
         GameModel modele;
         if (networkSession != null) {
@@ -155,7 +185,7 @@ public class MainFrame extends JFrame {
         plateau = new BoardPanel(modele);
         TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
-        controleur = new GameController(modele, this, plateau, aiPlayerIndex, aiDepth, networkSession,
+        controleur = new GameController(modele, this, plateau, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth, networkSession,
                 localPlayerIndex);
         plateau.setController(controleur);
 
@@ -233,9 +263,9 @@ public class MainFrame extends JFrame {
     public void relancerPartie() {
         if (isOnlineSession && onlineSessionConnection != null) {
             onlineGameCount++;
-            construireInterface(lastNom1, lastNom2, -1, 0, onlineSessionConnection, lastIsHost ? 0 : 1);
+            construireInterface(lastNom1, lastNom2, false, 0, false, 0, onlineSessionConnection, lastIsHost ? 0 : 1);
         } else if (lastNom1 != null) {
-            construireInterface(lastNom1, lastNom2, lastAiPlayerIndex, lastAiDepth, null, -1);
+            construireInterface(lastNom1, lastNom2, lastP1IsAi, lastP1AiDepth, lastP2IsAi, lastP2AiDepth, null, -1);
         } else {
             afficherMenu();
         }
