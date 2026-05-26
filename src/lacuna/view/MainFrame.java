@@ -68,6 +68,7 @@ public class MainFrame extends JFrame {
                 this::afficherSessionRejointe,
                 this::afficherSessionCreee);
 
+        setMinimumSize(new Dimension(550, 620));
         setContentPane(menu);
         revalidate();
         repaint();
@@ -179,6 +180,7 @@ public class MainFrame extends JFrame {
 
     private void initialiserInterface(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
             OnlineSessionConnection networkSession, int localPlayerIndex) {
+        setMinimumSize(new Dimension(920, 620));
         this.lastNom1 = modele.getJoueurs()[0].getName();
         this.lastNom2 = modele.getJoueurs()[1].getName();
         this.lastP1IsAi = p1IsAi;

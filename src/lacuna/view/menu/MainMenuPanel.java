@@ -54,6 +54,7 @@ public class MainMenuPanel extends JPanel {
     private final PrimaryButton playButton;
     private final SecondaryButton loadGameButton;
     private final LacunaServerClient serverClient;
+    private ProductArtPanel artPanel;
 
     private ToggleSwitch aiVsAiSwitch;
     private JTextField aiPlayerNameField;
@@ -114,11 +115,18 @@ public class MainMenuPanel extends JPanel {
 
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(1100, 680));
-        setMinimumSize(new Dimension(920, 620));
+        setMinimumSize(new Dimension(550, 620));
         setBackground(MenuTheme.BACKGROUND);
         setBorder(BorderFactory.createEmptyBorder(40, 58, 22, 58));
 
         modeSelect.addActionListener((ActionEvent e) -> updateModeFields());
+
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                handleResize();
+            }
+        });
 
         add(createContent(), BorderLayout.CENTER);
 
@@ -139,7 +147,8 @@ public class MainMenuPanel extends JPanel {
         art.weightx = 1;
         art.weighty = 1;
         art.fill = GridBagConstraints.BOTH;
-        content.add(new ProductArtPanel(), art);
+        this.artPanel = new ProductArtPanel();
+        content.add(this.artPanel, art);
 
         GridBagConstraints controls = new GridBagConstraints();
         controls.gridx = 1;
@@ -152,6 +161,17 @@ public class MainMenuPanel extends JPanel {
         content.add(createControls(), controls);
 
         return content;
+    }
+
+    private void handleResize() {
+        if (artPanel != null) {
+            boolean shouldShow = getWidth() >= 950;
+            if (artPanel.isVisible() != shouldShow) {
+                artPanel.setVisible(shouldShow);
+                revalidate();
+                repaint();
+            }
+        }
     }
 
     private JComponent createControls() {
