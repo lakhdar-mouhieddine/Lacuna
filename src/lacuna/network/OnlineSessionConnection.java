@@ -100,7 +100,7 @@ public final class OnlineSessionConnection implements AutoCloseable {
     public java.util.List<String> receiveData() throws IOException {
         String command = in.readLine();
         if (command == null) throw new IOException("Connection closed");
-        if (command.startsWith("LEFT")) throw new IOException("Peer left");
+        if (command.startsWith("LEFT")) throw new PeerLeftException();
         if (!command.startsWith("DATA ")) throw new IOException("Unexpected command: " + command);
         
         int count = Integer.parseInt(command.substring(5).trim());

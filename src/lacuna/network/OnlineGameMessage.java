@@ -6,7 +6,9 @@ public final class OnlineGameMessage {
         BOARD,
         BOARD_ACCEPTED,
         BOARD_REJECTED,
-        MOVE
+        MOVE,
+        REMATCH_REQUEST,
+        PEER_LEFT
     }
 
     private final Type type;
@@ -41,6 +43,14 @@ public final class OnlineGameMessage {
 
     static OnlineGameMessage move(OnlineMove move) {
         return new OnlineGameMessage(Type.MOVE, "", null, move, "");
+    }
+
+    static OnlineGameMessage rematchRequest() {
+        return new OnlineGameMessage(Type.REMATCH_REQUEST, "", null, null, "");
+    }
+
+    public static OnlineGameMessage peerLeft() {
+        return new OnlineGameMessage(Type.PEER_LEFT, "", null, null, "");
     }
 
     public Type getType() {

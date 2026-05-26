@@ -12,6 +12,7 @@ public final class OnlineGameChannel {
     private static final String BOARD_ACCEPTED = "BOARD_ACCEPTED";
     private static final String BOARD_REJECTED = "BOARD_REJECTED";
     private static final String MOVE = "MOVE";
+    private static final String REMATCH_REQUEST = "REMATCH_REQUEST";
 
     private final OnlineSessionConnection connection;
 
@@ -76,6 +77,12 @@ public final class OnlineGameChannel {
         return connection.sendData(lines);
     }
 
+    public boolean sendRematchRequest() {
+        List<String> lines = new ArrayList<>();
+        lines.add(REMATCH_REQUEST);
+        return connection.sendData(lines);
+    }
+
     public OnlineGameMessage receiveMessage() throws IOException {
         List<String> lines = connection.receiveData();
         if (lines.isEmpty()) {
@@ -97,6 +104,9 @@ public final class OnlineGameChannel {
         }
         if (MOVE.equals(type)) {
             return OnlineGameMessage.move(readMove(lines));
+        }
+        if (REMATCH_REQUEST.equals(type)) {
+            return OnlineGameMessage.rematchRequest();
         }
 
         throw new IOException("Unknown online game message: " + type);

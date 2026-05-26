@@ -72,12 +72,12 @@ public final class ToastMessage {
         int width = textWidth + PADDING_X * 2;
         int height = metrics.getHeight() + PADDING_Y * 2;
         int x = (component.getWidth() - width) / 2;
-        int y = showTop ? Math.round(component.getHeight() * 0.12f)
-                        : Math.round(component.getHeight() * 0.82f);
+        int y = showTop ? Math.round(component.getHeight() * 0.14f)
+                        : Math.round(component.getHeight() * 0.85f);
 
         Composite oldComposite = g2.getComposite();
         g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-        g2.setColor(new Color(218, 218, 222, 230));
+        g2.setColor(new Color(218, 218, 222, 200));
         g2.fillRoundRect(x, y, width, height, ARC, ARC);
         g2.setColor(new Color(28, 29, 34, 235));
         g2.drawString(text, x + PADDING_X, y + PADDING_Y + metrics.getAscent());
