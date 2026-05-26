@@ -38,13 +38,15 @@ public class MainMenuPanel extends JPanel {
     private final SegmentedChoice modeSelect;
     private final JPanel modeFields;
     private final PrimaryButton playButton;
-    private final LacunaServerClient serverClient;
+    private LacunaServerClient serverClient;
 
     private Timer serverStatusTimer;
     private boolean serverStatusCheckRunning;
+    private int serverStatusCheckVersion;
     private StatusDot serverStatusDot;
     private JLabel serverStatusLabel;
     private JLabel offlineNoticeLabel;
+    private JButton serverSettingsButton;
     private JLabel joinFeedbackLabel;
     private JLabel createFeedbackLabel;
     private JLabel createdSessionStatusLabel;
@@ -65,6 +67,7 @@ public class MainMenuPanel extends JPanel {
     private boolean creatingSession;
     private boolean waitingForCreatedPeer;
     private boolean publicSessionsRefreshRunning;
+    private int publicSessionsRefreshVersion;
     private PublicSession selectedPublicSession;
     private OnlineSessionConnection createdSessionConnection;
     private SwingWorker<PeerJoinResult, Void> peerWaitWorker;
@@ -127,10 +130,10 @@ public class MainMenuPanel extends JPanel {
 
     private JComponent createControls() {
         JPanel controls = MenuTheme.verticalPanel();
-        controls.setPreferredSize(new Dimension(CONTROLS_WIDTH, 560));
+        controls.setPreferredSize(new Dimension(CONTROLS_WIDTH, 590));
         controls.setMinimumSize(new Dimension(CONTROLS_WIDTH, 0));
 
-        controls.add(Box.createVerticalGlue());
+        controls.add(Box.createVerticalStrut(58));
         controls.add(MenuTheme.label("Mode de jeu", 16, MenuTheme.MUTED_TEXT));
         controls.add(Box.createVerticalStrut(10));
         controls.add(modeSelect);
@@ -210,6 +213,8 @@ public class MainMenuPanel extends JPanel {
         onlinePlayerNameField = playerName;
         serverStatusDot = new StatusDot();
         serverStatusLabel = MenuTheme.label("", 14, MenuTheme.MUTED_TEXT);
+        serverSettingsButton = new SmallSecondaryButton("Avancé");
+        serverSettingsButton.addActionListener((ActionEvent e) -> openServerSettings());
         onlineActionSelect = new SegmentedChoice(ONLINE_FRIEND, ONLINE_CREATE, ONLINE_PUBLIC);
         onlineOptionsPanel = MenuTheme.verticalPanel();
         offlineNoticeLabel = MenuTheme.label("Impossible de jouer tant que le serveur est hors ligne.", 12, MenuTheme.MUTED_TEXT);
@@ -240,10 +245,12 @@ public class MainMenuPanel extends JPanel {
         statusRow.setOpaque(false);
         statusRow.setLayout(new BoxLayout(statusRow, BoxLayout.X_AXIS));
         statusRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        statusRow.setMaximumSize(new Dimension(420, 18));
+        statusRow.setMaximumSize(new Dimension(420, 30));
         statusRow.add(serverStatusDot);
         statusRow.add(Box.createHorizontalStrut(10));
         statusRow.add(serverStatusLabel);
+        statusRow.add(Box.createHorizontalStrut(12));
+        statusRow.add(serverSettingsButton);
         statusRow.add(Box.createHorizontalGlue());
         return statusRow;
     }
@@ -362,6 +369,7 @@ public class MainMenuPanel extends JPanel {
             serverStatusTimer.stop();
             serverStatusTimer = null;
         }
+        serverStatusCheckVersion++;
         serverStatusCheckRunning = false;
     }
 
@@ -384,6 +392,7 @@ public class MainMenuPanel extends JPanel {
             publicSessionsTimer.stop();
             publicSessionsTimer = null;
         }
+        publicSessionsRefreshVersion++;
         publicSessionsRefreshRunning = false;
     }
 
@@ -402,16 +411,18 @@ public class MainMenuPanel extends JPanel {
         }
 
         publicSessionsRefreshRunning = true;
+        final int refreshVersion = publicSessionsRefreshVersion;
+        final LacunaServerClient refreshClient = serverClient;
         SwingWorker<ListPublicSessionsResult, Void> worker = new SwingWorker<>() {
             @Override
             protected ListPublicSessionsResult doInBackground() {
-                return serverClient.listPublicSessions();
+                return refreshClient.listPublicSessions();
             }
 
             @Override
             protected void done() {
                 publicSessionsRefreshRunning = false;
-                if (publicSessionsList == null || joiningPublicSession) {
+                if (refreshVersion != publicSessionsRefreshVersion || publicSessionsList == null || joiningPublicSession) {
                     return;
                 }
 
@@ -451,15 +462,20 @@ public class MainMenuPanel extends JPanel {
         }
 
         serverStatusCheckRunning = true;
+        final int checkVersion = serverStatusCheckVersion;
+        final LacunaServerClient statusClient = serverClient;
         SwingWorker<Boolean, Void> worker = new SwingWorker<>() {
             @Override
             protected Boolean doInBackground() {
-                return serverClient.ping();
+                return statusClient.ping();
             }
 
             @Override
             protected void done() {
                 serverStatusCheckRunning = false;
+                if (checkVersion != serverStatusCheckVersion) {
+                    return;
+                }
                 try {
                     updateServerStatus(get());
                 } catch (Exception e) {
@@ -492,13 +508,42 @@ public class MainMenuPanel extends JPanel {
         }
 
         updateOnlineActionButtons();
+        if (online && publicSessionsList != null) {
+            refreshPublicSessions();
+        }
         refreshFields();
+    }
+
+    private void openServerSettings() {
+        if (joiningFriendSession || joiningPublicSession || creatingSession || waitingForCreatedPeer) {
+            return;
+        }
+
+        boolean changed = ServerSettingsDialog.showDialog(this);
+        if (!changed) {
+            return;
+        }
+
+        stopServerStatusChecks();
+        serverClient = new LacunaServerClient();
+        updateServerStatus(false);
+        if (publicSessionsList != null) {
+            stopPublicSessionsTimer();
+            publicSessionsList.setEmptyText("Chargement des sessions...");
+            publicSessionsList.clearSessions();
+            selectedPublicSession = null;
+            startPublicSessionRefreshes();
+        }
+        startServerStatusChecks();
     }
 
     private void updateOnlineActionButtons() {
         boolean online = serverStatusDot != null && serverStatusDot.isOnline();
         boolean busy = joiningFriendSession || joiningPublicSession || creatingSession || waitingForCreatedPeer;
         modeSelect.setEnabled(!busy);
+        if (serverSettingsButton != null) {
+            serverSettingsButton.setEnabled(!busy);
+        }
         if (onlinePlayerNameField != null) {
             onlinePlayerNameField.setEnabled(!busy);
         }

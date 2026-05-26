@@ -11,8 +11,6 @@ import java.util.List;
 import java.util.Locale;
 
 public class LacunaServerClient {
-    public static final String HOST = "127.0.0.1";
-    public static final int PORT = 38400;
     public static final int STATUS_TIMEOUT_MS = 700;
     public static final int STATUS_CHECK_MS = 2000;
     public static final int REQUEST_TIMEOUT_MS = 2000;
@@ -20,9 +18,22 @@ public class LacunaServerClient {
 
     private static final String SESSION_ID_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
+    private final ServerEndpoint endpoint;
+
+    public LacunaServerClient() {
+        this(LacunaServerConfig.currentEndpoint());
+    }
+
+    public LacunaServerClient(ServerEndpoint endpoint) {
+        if (endpoint == null) {
+            throw new IllegalArgumentException("Server endpoint is required.");
+        }
+        this.endpoint = endpoint;
+    }
+
     public boolean ping() {
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(HOST, PORT), STATUS_TIMEOUT_MS);
+            socket.connect(new InetSocketAddress(endpoint.getHost(), endpoint.getPort()), STATUS_TIMEOUT_MS);
             socket.setSoTimeout(STATUS_TIMEOUT_MS);
 
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -47,7 +58,7 @@ public class LacunaServerClient {
 
         Socket socket = new Socket();
         try {
-            socket.connect(new InetSocketAddress(HOST, PORT), REQUEST_TIMEOUT_MS);
+            socket.connect(new InetSocketAddress(endpoint.getHost(), endpoint.getPort()), REQUEST_TIMEOUT_MS);
             socket.setSoTimeout(REQUEST_TIMEOUT_MS);
 
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -78,7 +89,7 @@ public class LacunaServerClient {
 
         Socket socket = new Socket();
         try {
-            socket.connect(new InetSocketAddress(HOST, PORT), REQUEST_TIMEOUT_MS);
+            socket.connect(new InetSocketAddress(endpoint.getHost(), endpoint.getPort()), REQUEST_TIMEOUT_MS);
             socket.setSoTimeout(REQUEST_TIMEOUT_MS);
 
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -104,7 +115,7 @@ public class LacunaServerClient {
 
     public ListPublicSessionsResult listPublicSessions() {
         try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(HOST, PORT), REQUEST_TIMEOUT_MS);
+            socket.connect(new InetSocketAddress(endpoint.getHost(), endpoint.getPort()), REQUEST_TIMEOUT_MS);
             socket.setSoTimeout(REQUEST_TIMEOUT_MS);
 
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);

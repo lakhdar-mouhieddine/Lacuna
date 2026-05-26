@@ -75,6 +75,58 @@ final class SecondaryButton extends MenuButton {
     }
 }
 
+class SmallMenuButton extends JButton {
+    private final Color colorStart;
+    private final Color colorEnd;
+
+    SmallMenuButton(String text, Color colorStart, Color colorEnd) {
+        super(text);
+        this.colorStart = colorStart;
+        this.colorEnd = colorEnd;
+        MenuTheme.size(this, 88, 30, 88, 30);
+        setFont(new Font("Segoe UI", Font.BOLD, 12));
+        setForeground(Color.WHITE);
+        setFocusPainted(false);
+        setContentAreaFilled(false);
+        setBorderPainted(false);
+        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        MenuAssets.prepare(g2);
+
+        Color start = isEnabled() ? colorStart : new Color(78, 76, 86);
+        Color end = isEnabled() ? colorEnd : new Color(78, 76, 86);
+        int inset = getModel().isPressed() && isEnabled() ? 1 : 0;
+        Shape shape = new RoundRectangle2D.Double(
+            inset,
+            inset,
+            getWidth() - 1 - inset * 2,
+            getHeight() - 1 - inset * 2,
+            22,
+            22
+        );
+
+        g2.setPaint(new GradientPaint(0, 0, start, getWidth(), 0, end));
+        g2.fill(shape);
+        if (getModel().isRollover() && isEnabled()) {
+            g2.setColor(new Color(255, 255, 255, 26));
+            g2.fill(shape);
+        }
+
+        g2.dispose();
+        super.paintComponent(g);
+    }
+}
+
+final class SmallSecondaryButton extends SmallMenuButton {
+    SmallSecondaryButton(String text) {
+        super(text, new Color(61, 60, 70), new Color(80, 79, 90));
+    }
+}
+
 final class OrangeButton extends MenuButton {
     OrangeButton(String text) {
         super(text, new Color(208, 104, 35), new Color(235, 141, 52));
