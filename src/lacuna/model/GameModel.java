@@ -1,5 +1,8 @@
 package lacuna.model;
 
+import lacuna.network.OnlineBoardSnapshot;
+import lacuna.network.OnlineFlowerSnapshot;
+
 import java.util.*;
 import java.awt.geom.Line2D;
 
@@ -12,6 +15,8 @@ public class GameModel implements java.io.Serializable {
     
     private static final double MAX_RADIUS_X = 0.76;
     private static final double MAX_RADIUS_Y = 0.88;
+    private static final double MIN_FLOWER_SPACING = 0.12;
+    private static final double VALIDATION_EPSILON = 1e-9;
     public static final double HITBOX_RADIUS = 0.05;
 
     private final List<Flower> flowers;
@@ -72,6 +77,32 @@ public class GameModel implements java.io.Serializable {
         return players[0].getCapturedFlowers().isEmpty() && players[1].getCapturedFlowers().isEmpty();
     }
 
+    private GameModel(String name1, String name2, OnlineBoardSnapshot snapshot) {
+        String validationError = validateOnlineBoardSnapshot(snapshot);
+        if (validationError != null) {
+            throw new IllegalArgumentException(validationError);
+        }
+
+        flowers = new ArrayList<>(NUM_FLOWERS);
+        players = new Player[]{
+            new Player(name1, 0),
+            new Player(name2, 1)
+        };
+        currentPlayerIndex = 0;
+        phase = GamePhase.PLACING;
+
+        for (OnlineFlowerSnapshot flower : snapshot.getFlowers()) {
+            flowers.add(new Flower(flower.getColor(), flower.getX(), flower.getY()));
+        }
+
+        creerPions();
+        players[0].captureFlower(flowers.get(snapshot.getStartingCapturedFlowerIndex()));
+    }
+
+    public static GameModel fromOnlineBoardSnapshot(String name1, String name2, OnlineBoardSnapshot snapshot) {
+        return new GameModel(name1, name2, snapshot);
+    }
+
     public void addModelListener(ModelListener l) { listeners.add(l); }
     public void removeModelListener(ModelListener l) { listeners.remove(l); }
     private void notifyListeners() {
@@ -87,8 +118,6 @@ public class GameModel implements java.io.Serializable {
         }
         Collections.shuffle(poolCouleurs, rng);
 
-        double espacementMin = 0.12;
-
         for (int i = 0; i < NUM_FLOWERS; i++) {
             double x = 0, y = 0;
             boolean valid = false;
@@ -101,7 +130,7 @@ public class GameModel implements java.io.Serializable {
                 
                 valid = true;
                 for (Flower f : flowers) {
-                    if (f.distanceTo(x, y) < espacementMin) {
+                    if (f.distanceTo(x, y) < MIN_FLOWER_SPACING) {
                         valid = false;
                         break;
                     }
@@ -122,6 +151,83 @@ public class GameModel implements java.io.Serializable {
         if (flowers.isEmpty()) return;
         Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
         players[startingPlayerIndex].captureFlower(startingFlower);
+    }
+
+    public OnlineBoardSnapshot toOnlineBoardSnapshot() {
+        List<OnlineFlowerSnapshot> snapshots = new ArrayList<>();
+        for (Flower flower : flowers) {
+            snapshots.add(new OnlineFlowerSnapshot(flower.getColor(), flower.getX(), flower.getY()));
+        }
+
+        int startingCapturedFlowerIndex = -1;
+        for (Flower flower : players[0].getCapturedFlowers()) {
+            int index = flowers.indexOf(flower);
+            if (index >= 0) {
+                startingCapturedFlowerIndex = index;
+                break;
+            }
+        }
+
+        return new OnlineBoardSnapshot(snapshots, startingCapturedFlowerIndex);
+    }
+
+    public static String validateOnlineBoardSnapshot(OnlineBoardSnapshot snapshot) {
+        if (snapshot == null) {
+            return "Plateau absent.";
+        }
+
+        List<OnlineFlowerSnapshot> snapshotFlowers = snapshot.getFlowers();
+        if (snapshotFlowers.size() != NUM_FLOWERS) {
+            return "Nombre de fleurs invalide.";
+        }
+
+        int startingIndex = snapshot.getStartingCapturedFlowerIndex();
+        if (startingIndex < 0 || startingIndex >= NUM_FLOWERS) {
+            return "Fleur de depart invalide.";
+        }
+
+        EnumMap<FlowerColor, Integer> colorCounts = new EnumMap<>(FlowerColor.class);
+        for (FlowerColor color : FlowerColor.values()) {
+            colorCounts.put(color, 0);
+        }
+
+        for (int i = 0; i < snapshotFlowers.size(); i++) {
+            OnlineFlowerSnapshot flower = snapshotFlowers.get(i);
+            if (flower == null || flower.getColor() == null) {
+                return "Fleur invalide.";
+            }
+            if (!Double.isFinite(flower.getX()) || !Double.isFinite(flower.getY())) {
+                return "Coordonnees invalides.";
+            }
+            if (!isInsideBoardEllipse(flower.getX(), flower.getY())) {
+                return "Fleur hors du plateau.";
+            }
+
+            colorCounts.put(flower.getColor(), colorCounts.get(flower.getColor()) + 1);
+
+            for (int j = 0; j < i; j++) {
+                OnlineFlowerSnapshot other = snapshotFlowers.get(j);
+                double dx = flower.getX() - other.getX();
+                double dy = flower.getY() - other.getY();
+                if (Math.sqrt(dx * dx + dy * dy) + VALIDATION_EPSILON < MIN_FLOWER_SPACING) {
+                    return "Fleurs trop proches.";
+                }
+            }
+        }
+
+        for (FlowerColor color : FlowerColor.values()) {
+            if (colorCounts.get(color) != FLOWERS_PER_COLOR) {
+                return "Distribution des couleurs invalide.";
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean isInsideBoardEllipse(double x, double y) {
+        double normalizedX = x / MAX_RADIUS_X;
+        double normalizedY = y / MAX_RADIUS_Y;
+        return normalizedX * normalizedX + normalizedY * normalizedY <= 1.0 + VALIDATION_EPSILON;
     }
 
     public boolean estLigneValide(Flower f1, Flower f2) {

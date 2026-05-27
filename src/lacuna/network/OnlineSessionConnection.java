@@ -12,6 +12,7 @@ public final class OnlineSessionConnection implements AutoCloseable {
     private final String playerName;
     private final String sessionId;
 
+    private String peerName = "";
     private boolean closed;
 
     OnlineSessionConnection(Socket socket, BufferedReader in, PrintWriter out, String playerName, String sessionId) {
@@ -30,6 +31,14 @@ public final class OnlineSessionConnection implements AutoCloseable {
         return sessionId;
     }
 
+    public synchronized String getPeerName() {
+        return peerName;
+    }
+
+    public synchronized void rememberPeerName(String peerName) {
+        this.peerName = peerName == null ? "" : peerName.trim();
+    }
+
     public PeerJoinResult waitForPeerJoin() {
         try {
             String line = in.readLine();
@@ -42,6 +51,7 @@ public final class OnlineSessionConnection implements AutoCloseable {
                 if (line.length() > "JOINED".length()) {
                     peerName = line.substring("JOINED".length()).trim();
                 }
+                rememberPeerName(peerName);
                 return PeerJoinResult.joined(peerName);
             }
         } catch (IOException e) {
@@ -90,7 +100,7 @@ public final class OnlineSessionConnection implements AutoCloseable {
     public java.util.List<String> receiveData() throws IOException {
         String command = in.readLine();
         if (command == null) throw new IOException("Connection closed");
-        if (command.startsWith("LEFT")) throw new IOException("Peer left");
+        if (command.startsWith("LEFT")) throw new PeerLeftException();
         if (!command.startsWith("DATA ")) throw new IOException("Unexpected command: " + command);
         
         int count = Integer.parseInt(command.substring(5).trim());

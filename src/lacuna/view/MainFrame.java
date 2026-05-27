@@ -2,7 +2,11 @@ package lacuna.view;
 
 import lacuna.model.GameModel;
 import lacuna.controller.GameController;
+import lacuna.network.OnlineBoardSnapshot;
+import lacuna.network.OnlineGameChannel;
+import lacuna.network.OnlineGameMessage;
 import lacuna.network.OnlineSessionConnection;
+import lacuna.network.PeerJoinResult;
 import lacuna.view.menu.MainMenuPanel;
 
 import javax.swing.*;
@@ -26,9 +30,10 @@ public class MainFrame extends JFrame {
     private boolean lastP2IsAi;
     private int lastP2AiDepth;
     private OnlineSessionConnection onlineSessionConnection;
-    private boolean lastIsHost;
+    private SwingWorker<OnlineStartupResult, Void> onlineStartupWorker;
+    private SwingWorker<PeerJoinResult, Void> onlinePeerWaitWorker;
+    private OnlineWaitForPlayerDialog onlineWaitDialog;
     private boolean isOnlineSession;
-    private int onlineGameCount = 0;
 
     public BoardPanel getBoardPanel() {
         return plateau;
@@ -129,27 +134,149 @@ public class MainFrame extends JFrame {
     }
 
     private void demarrerPartieEnLigne(OnlineSessionConnection sessionConnection, boolean isHost) {
+        annulerAttenteNouveauJoueur();
         if (onlineSessionConnection != sessionConnection) {
             fermerSessionEnLigneActuelle();
             onlineSessionConnection = sessionConnection;
         }
         isOnlineSession = true;
-        this.lastIsHost = isHost;
-        this.onlineGameCount = 0;
 
         String myName = sessionConnection.getPlayerName();
-        String nom1 = isHost ? myName : "Adversaire";
-        String nom2 = isHost ? "Adversaire" : myName;
         int localPlayerIndex = isHost ? 0 : 1;
 
-        construireInterface(nom1, nom2, false, 0, false, 0, 0, sessionConnection, localPlayerIndex);
+        lastNom1 = isHost ? myName : "Adversaire";
+        lastNom2 = isHost ? "Adversaire" : myName;
+        lastAiPlayerIndex = -1;
+        lastAiDepth = 0;
+
+        afficherPreparationEnLigne("Chargement de la partie...");
+
+        onlineStartupWorker = new SwingWorker<>() {
+            @Override
+            protected OnlineStartupResult doInBackground() {
+                OnlineGameChannel channel = new OnlineGameChannel(sessionConnection);
+                try {
+                    if (isHost) {
+                        String peerName = cleanDisplayName(sessionConnection.getPeerName(), "Adversaire");
+                        GameModel modele = new GameModel(myName, peerName);
+                        if (!channel.sendPlayerName(myName)) {
+                            return OnlineStartupResult.failure("Impossible d'envoyer le nom du joueur.");
+                        }
+                        if (!channel.sendBoard(modele.toOnlineBoardSnapshot())) {
+                            return OnlineStartupResult.failure("Impossible d'envoyer le plateau.");
+                        }
+
+                        OnlineGameMessage response = channel.receiveMessage();
+                        if (response.getType() == OnlineGameMessage.Type.BOARD_ACCEPTED) {
+                            return OnlineStartupResult.success(modele, channel, localPlayerIndex);
+                        }
+                        if (response.getType() == OnlineGameMessage.Type.BOARD_REJECTED) {
+                            String reason = response.getReason();
+                            if (reason == null || reason.isBlank()) {
+                                reason = "plateau refuse par l'adversaire.";
+                            }
+                            return OnlineStartupResult.failure("Connexion annulee : " + reason);
+                        }
+                        return OnlineStartupResult.failure("Reponse inattendue de l'adversaire.");
+                    }
+
+                    String ownerName = cleanDisplayName(channel.receivePlayerName(), "Adversaire");
+                    sessionConnection.rememberPeerName(ownerName);
+                    OnlineBoardSnapshot snapshot = channel.receiveBoard();
+                    String validationError = GameModel.validateOnlineBoardSnapshot(snapshot);
+                    if (validationError != null) {
+                        channel.sendBoardRejected(validationError);
+                        return OnlineStartupResult.failure("Plateau refuse : " + validationError);
+                    }
+
+                    GameModel modele;
+                    try {
+                        modele = GameModel.fromOnlineBoardSnapshot(ownerName, myName, snapshot);
+                    } catch (IllegalArgumentException e) {
+                        String reason = e.getMessage() == null ? "Plateau invalide." : e.getMessage();
+                        channel.sendBoardRejected(reason);
+                        return OnlineStartupResult.failure("Plateau refuse : " + reason);
+                    }
+
+                    if (!channel.sendBoardAccepted()) {
+                        return OnlineStartupResult.failure("Impossible de confirmer le plateau.");
+                    }
+                    return OnlineStartupResult.success(modele, channel, localPlayerIndex);
+                } catch (Exception e) {
+                    return OnlineStartupResult.failure("Connexion avec l'adversaire interrompue.");
+                }
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled()) {
+                    return;
+                }
+
+                OnlineStartupResult result;
+                try {
+                    result = get();
+                } catch (Exception e) {
+                    result = OnlineStartupResult.failure("Impossible de demarrer la partie en ligne.");
+                }
+
+                onlineStartupWorker = null;
+                if (onlineSessionConnection != sessionConnection) {
+                    return;
+                }
+
+                if (result.isSuccess()) {
+                    afficherInterfaceJeu(result.model, -1, 0, result.channel, result.localPlayerIndex);
+                    return;
+                }
+
+                fermerSessionEnLigneActuelle();
+                isOnlineSession = false;
+                JOptionPane.showMessageDialog(MainFrame.this, result.error, "Partie en ligne", JOptionPane.WARNING_MESSAGE);
+                afficherMenu();
+            }
+        };
+        onlineStartupWorker.execute();
     }
 
     private void fermerSessionEnLigneActuelle() {
+        if (onlineStartupWorker != null) {
+            onlineStartupWorker.cancel(true);
+            onlineStartupWorker = null;
+        }
+        annulerAttenteNouveauJoueur();
+        arreterControleurActuel();
         if (onlineSessionConnection != null) {
             onlineSessionConnection.close();
             onlineSessionConnection = null;
         }
+    }
+
+    private void arreterControleurActuel() {
+        if (controleur != null) {
+            controleur.arreter();
+            controleur = null;
+        }
+    }
+
+    private void annulerAttenteNouveauJoueur() {
+        if (onlinePeerWaitWorker != null) {
+            onlinePeerWaitWorker.cancel(true);
+            onlinePeerWaitWorker = null;
+        }
+        fermerDialogueAttenteNouveauJoueur(OnlineWaitForPlayerDialog.Choice.CANCEL);
+    }
+
+    private void fermerDialogueAttenteNouveauJoueur(OnlineWaitForPlayerDialog.Choice choice) {
+        if (onlineWaitDialog == null) {
+            return;
+        }
+        if (choice == OnlineWaitForPlayerDialog.Choice.JOINED) {
+            onlineWaitDialog.closeAsJoined();
+        } else {
+            onlineWaitDialog.closeAsCancelled();
+        }
+        onlineWaitDialog = null;
     }
 
     private JPanel createCenteredPanel() {
@@ -166,28 +293,33 @@ public class MainFrame extends JFrame {
         return label;
     }
 
-    private void construireInterface(String nom1, String nom2, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
-            int startingPlayerIndex, OnlineSessionConnection networkSession, int localPlayerIndex) {
-        GameModel modele;
-        if (networkSession != null) {
-            long seed = networkSession.getSessionId().hashCode() + onlineGameCount;
-            modele = new GameModel(nom1, nom2, 0, seed);
-        } else {
-            modele = new GameModel(nom1, nom2, 0, new java.util.Random().nextLong(), true);
+    private static String cleanDisplayName(String name, String fallback) {
+        if (name == null || name.isBlank()) {
+            return fallback;
         }
-        initialiserInterface(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth, networkSession, localPlayerIndex);
+        return name.trim();
     }
 
-    private void initialiserInterface(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
-            OnlineSessionConnection networkSession, int localPlayerIndex) {
-        setMinimumSize(new Dimension(920, 620));
-        this.lastNom1 = modele.getJoueurs()[0].getName();
-        this.lastNom2 = modele.getJoueurs()[1].getName();
-        this.lastP1IsAi = p1IsAi;
-        this.lastP1AiDepth = p1AiDepth;
-        this.lastP2IsAi = p2IsAi;
-        this.lastP2AiDepth = p2AiDepth;
+    private void afficherPreparationEnLigne(String message) {
+        JPanel placeholder = createCenteredPanel();
+        placeholder.add(createOnlineLabel(message, 28, new Color(245, 244, 248)));
+        setContentPane(placeholder);
+        revalidate();
+        repaint();
+    }
 
+    private void construireInterface(String nom1, String nom2, int aiPlayerIndex, int aiDepth,
+            OnlineGameChannel onlineChannel, int localPlayerIndex) {
+        this.lastNom1 = nom1;
+        this.lastNom2 = nom2;
+        this.lastAiPlayerIndex = aiPlayerIndex;
+        this.lastAiDepth = aiDepth;
+
+        afficherInterfaceJeu(new GameModel(nom1, nom2), aiPlayerIndex, aiDepth, onlineChannel, localPlayerIndex);
+    }
+
+    private void afficherInterfaceJeu(GameModel modele, int aiPlayerIndex, int aiDepth,
+            OnlineGameChannel onlineChannel, int localPlayerIndex) {
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
         plateau = new BoardPanel(modele);
@@ -197,7 +329,6 @@ public class MainFrame extends JFrame {
                 localPlayerIndex);
         plateau.setController(controleur);
 
-        JButton undoButton = createUndoButton(modele);
         JButton quitButton = createQuitButton();
         JButton helpButton = createHelpButton();
 
@@ -382,10 +513,87 @@ public class MainFrame extends JFrame {
         repaint();
     }
 
+    public void relancerPartieEnLigneMemeSession(boolean isHost) {
+        if (onlineSessionConnection == null) {
+            isOnlineSession = false;
+            afficherMenu();
+            return;
+        }
+
+        arreterControleurActuel();
+        demarrerPartieEnLigne(onlineSessionConnection, isHost);
+    }
+
+    public void attendreNouveauJoueurDansSession() {
+        if (onlineSessionConnection == null) {
+            isOnlineSession = false;
+            afficherMenu();
+            return;
+        }
+
+        OnlineSessionConnection connection = onlineSessionConnection;
+        arreterControleurActuel();
+        isOnlineSession = true;
+        OnlineWaitForPlayerDialog waitDialog = new OnlineWaitForPlayerDialog(this, connection.getSessionId());
+        onlineWaitDialog = waitDialog;
+
+        onlinePeerWaitWorker = new SwingWorker<>() {
+            @Override
+            protected PeerJoinResult doInBackground() {
+                return connection.waitForPeerJoin();
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled() || onlineSessionConnection != connection) {
+                    return;
+                }
+
+                onlinePeerWaitWorker = null;
+                try {
+                    PeerJoinResult result = get();
+                    if (result.isJoined()) {
+                        fermerDialogueAttenteNouveauJoueur(OnlineWaitForPlayerDialog.Choice.JOINED);
+                        demarrerPartieEnLigne(connection, true);
+                    } else {
+                        fermerDialogueAttenteNouveauJoueur(OnlineWaitForPlayerDialog.Choice.CANCEL);
+                        fermerSessionEnLigneActuelle();
+                        isOnlineSession = false;
+                        afficherMenu();
+                    }
+                } catch (Exception e) {
+                    fermerDialogueAttenteNouveauJoueur(OnlineWaitForPlayerDialog.Choice.CANCEL);
+                    fermerSessionEnLigneActuelle();
+                    isOnlineSession = false;
+                    afficherMenu();
+                }
+            }
+        };
+        onlinePeerWaitWorker.execute();
+
+        OnlineWaitForPlayerDialog.Choice choice = waitDialog.showDialog();
+        if (onlineWaitDialog == waitDialog) {
+            onlineWaitDialog = null;
+        }
+        if (choice == OnlineWaitForPlayerDialog.Choice.CANCEL
+                && onlinePeerWaitWorker != null
+                && !onlinePeerWaitWorker.isDone()) {
+            fermerSessionEnLigneActuelle();
+            isOnlineSession = false;
+            afficherMenu();
+        }
+    }
+
+    public void afficherAdversaireDeconnecte() {
+        fermerSessionEnLigneActuelle();
+        isOnlineSession = false;
+        OnlineDisconnectDialog.show(this);
+        afficherMenu();
+    }
+
     public void relancerPartie() {
-        if (isOnlineSession && onlineSessionConnection != null) {
-            onlineGameCount++;
-            construireInterface(lastNom1, lastNom2, false, 0, false, 0, 0, onlineSessionConnection, lastIsHost ? 0 : 1);
+        if (isOnlineSession) {
+            retourMenuPrincipal();
         } else if (lastNom1 != null) {
             construireInterface(lastNom1, lastNom2, lastP1IsAi, lastP1AiDepth, lastP2IsAi, lastP2AiDepth, 0, null, -1);
         } else {
@@ -398,6 +606,8 @@ public class MainFrame extends JFrame {
     }
 
     public void retourMenuPrincipal() {
+        fermerSessionEnLigneActuelle();
+        isOnlineSession = false;
         afficherMenu();
     }
 
@@ -592,15 +802,37 @@ public class MainFrame extends JFrame {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(100, 32));
         btn.addActionListener(e -> {
-            int confirm = JOptionPane.showConfirmDialog(this,
-                    "Voulez-vous vraiment quitter la partie en cours ?",
-                    "Quitter",
-                    JOptionPane.YES_NO_OPTION);
-            if (confirm == JOptionPane.YES_OPTION) {
+            if (QuitGameDialog.confirm(this)) {
                 retourMenuPrincipal();
             }
         });
         return btn;
+    }
+
+    private static final class OnlineStartupResult {
+        private final GameModel model;
+        private final OnlineGameChannel channel;
+        private final int localPlayerIndex;
+        private final String error;
+
+        private OnlineStartupResult(GameModel model, OnlineGameChannel channel, int localPlayerIndex, String error) {
+            this.model = model;
+            this.channel = channel;
+            this.localPlayerIndex = localPlayerIndex;
+            this.error = error;
+        }
+
+        private static OnlineStartupResult success(GameModel model, OnlineGameChannel channel, int localPlayerIndex) {
+            return new OnlineStartupResult(model, channel, localPlayerIndex, null);
+        }
+
+        private static OnlineStartupResult failure(String error) {
+            return new OnlineStartupResult(null, null, -1, error);
+        }
+
+        private boolean isSuccess() {
+            return model != null && channel != null;
+        }
     }
 
     public static void main(String[] args) {

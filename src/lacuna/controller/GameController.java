@@ -7,11 +7,17 @@ import lacuna.model.Pawn;
 import lacuna.model.Player;
 import lacuna.model.AI.AIMove;
 import lacuna.model.AI.Minimax;
+import lacuna.network.OnlineGameChannel;
+import lacuna.network.OnlineGameMessage;
+import lacuna.network.OnlineMove;
+import lacuna.network.PeerLeftException;
 import lacuna.view.BoardPanel;
 import lacuna.view.GameResultDialog;
 import lacuna.view.MainFrame;
+import lacuna.view.OnlineGameResultDialog;
 
 import javax.swing.*;
+import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,19 +28,26 @@ public class GameController {
     private final GameModel model;
     private final MainFrame mainFrame;
     private final BoardPanel boardPanel;
+    private final int aiPlayerIndex;
+    private final int aiDepth;
+    private final OnlineGameChannel onlineChannel;
     private final boolean p1IsAi;
     private final int p1AiDepth;
     private final boolean p2IsAi;
     private final int p2AiDepth;
     private final lacuna.network.OnlineSessionConnection networkSession;
     private final int localPlayerIndex;
-    private SwingWorker<Void, List<String>> networkWorker;
-    private boolean localWantsRematch = false;
-    private boolean opponentWantsRematch = false;
+    private SwingWorker<Void, OnlineGameMessage> networkWorker;
+    private OnlineGameResultDialog onlineResultDialog;
 
     private boolean aiThinking = false;
     private Timer aiTimer;
     private SwingWorker<AIMove, Void> aiWorker;
+    private volatile boolean localRematchRequested;
+    private volatile boolean peerRematchRequested;
+    private volatile boolean peerLeftAfterResult;
+    private volatile boolean peerLeftHandled;
+    private volatile boolean listenerEndedForResult;
 
     public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth, lacuna.network.OnlineSessionConnection networkSession, int localPlayerIndex) {
         this.model = model;
@@ -47,7 +60,7 @@ public class GameController {
         this.networkSession = networkSession;
         this.localPlayerIndex = localPlayerIndex;
         
-        if (networkSession != null) {
+        if (onlineChannel != null) {
             startNetworkListener();
         }
     }
@@ -58,10 +71,17 @@ public class GameController {
             protected Void doInBackground() throws Exception {
                 while (!isCancelled()) {
                     try {
-                        List<String> data = networkSession.receiveData();
-                        if (data != null && !data.isEmpty()) {
-                            publish(data);
+                        OnlineGameMessage message = onlineChannel.receiveMessage();
+                        publish(message);
+                        if (message.getType() == OnlineGameMessage.Type.REMATCH_REQUEST
+                                && model.getPhase() == GameModel.GamePhase.FINISHED) {
+                            listenerEndedForResult = true;
+                            break;
                         }
+                    } catch (PeerLeftException e) {
+                        publish(OnlineGameMessage.peerLeft());
+                        listenerEndedForResult = model.getPhase() == GameModel.GamePhase.FINISHED;
+                        break;
                     } catch (java.io.IOException e) {
                         if (!isCancelled()) {
                             e.printStackTrace();
@@ -73,43 +93,69 @@ public class GameController {
             }
 
             @Override
-            protected void process(List<List<String>> chunks) {
-                for (List<String> data : chunks) {
-                    if (data.size() == 1 && data.get(0).equals("REMATCH")) {
-                        opponentWantsRematch = true;
-                        if (localWantsRematch) {
-                            SwingUtilities.invokeLater(mainFrame::relancerPartie);
-                        }
-                    } else {
-                        traiterCoupReseau(data);
+            protected void process(List<OnlineGameMessage> chunks) {
+                for (OnlineGameMessage message : chunks) {
+                    if (message.getType() == OnlineGameMessage.Type.MOVE) {
+                        traiterCoupReseau(message.getMove());
+                    } else if (message.getType() == OnlineGameMessage.Type.REMATCH_REQUEST) {
+                        traiterDemandeRevanche();
+                    } else if (message.getType() == OnlineGameMessage.Type.PEER_LEFT) {
+                        traiterAdversaireParti();
                     }
                 }
             }
             
             @Override
             protected void done() {
-                if (localWantsRematch && !opponentWantsRematch) {
-                    JOptionPane.showMessageDialog(mainFrame, "L'adversaire a refuse la revanche ou a quitte la partie.", "Deconnexion", JOptionPane.WARNING_MESSAGE);
-                    mainFrame.retourMenuPrincipal();
-                } else if (model.getVainqueur() == null && model.getPhase() != GameModel.GamePhase.RESOLVING && !localWantsRematch) {
-                    JOptionPane.showMessageDialog(mainFrame, "L'adversaire a quitte la partie.", "Deconnexion", JOptionPane.WARNING_MESSAGE);
-                    mainFrame.retourMenuPrincipal();
+                if (isCancelled()) {
+                    return;
+                }
+                if (listenerEndedForResult || peerLeftHandled) {
+                    return;
+                }
+                if (model.getPhase() != GameModel.GamePhase.FINISHED
+                        && model.getPhase() != GameModel.GamePhase.RESOLVING) {
+                    mainFrame.afficherAdversaireDeconnecte();
                 }
             }
         };
         networkWorker.execute();
     }
 
-    private void traiterCoupReseau(List<String> data) {
-        if (data.size() < 4) return;
+    public void arreter() {
+        if (networkWorker != null) {
+            networkWorker.cancel(true);
+        }
+        if (aiTimer != null) {
+            aiTimer.stop();
+        }
+        if (aiWorker != null) {
+            aiWorker.cancel(true);
+        }
+        aiThinking = false;
+    }
+
+    private void traiterCoupReseau(OnlineMove move) {
+        if (move == null || model.getJoueurCourant().getIndex() == localPlayerIndex) {
+            return;
+        }
+
         try {
-            int f1Index = Integer.parseInt(data.get(0));
-            int f2Index = Integer.parseInt(data.get(1));
-            double posX = Double.parseDouble(data.get(2));
-            double posY = Double.parseDouble(data.get(3));
+            int f1Index = move.getFirstFlowerIndex();
+            int f2Index = move.getSecondFlowerIndex();
+            double posX = move.getPawnX();
+            double posY = move.getPawnY();
+            if (f1Index < 0 || f1Index >= model.getFleurs().size()
+                    || f2Index < 0 || f2Index >= model.getFleurs().size()
+                    || !Double.isFinite(posX) || !Double.isFinite(posY)) {
+                return;
+            }
             
             Flower f1 = model.getFleurs().get(f1Index);
             Flower f2 = model.getFleurs().get(f2Index);
+            if (!model.estLigneValide(f1, f2) || !isRemotePawnPositionValid(f1, f2, posX, posY)) {
+                return;
+            }
             
             Pawn pionLibre = null;
             for (Pawn pw : model.getJoueurCourant().getPawns()) {
@@ -117,15 +163,52 @@ public class GameController {
             }
             final Pawn finalPionLibre = pionLibre;
             
-            boardPanel.montrerIntentionIA(f1, f2, posX, posY, () -> {
+            boardPanel.montrerIntentionPlacement(f1, f2, posX, posY, () -> {
                 boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
                 if (success && finalPionLibre != null) {
-                    boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
+                    boardPanel.jouerAnimationPionDistant(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
                 }
             });
-        } catch (NumberFormatException e) {
+        } catch (RuntimeException e) {
             e.printStackTrace();
         }
+    }
+
+    private boolean isRemotePawnPositionValid(Flower f1, Flower f2, double posX, double posY) {
+        if (!Double.isFinite(posX) || !Double.isFinite(posY)) {
+            return false;
+        }
+
+        Line2D.Double segment = new Line2D.Double(f1.getX(), f1.getY(), f2.getX(), f2.getY());
+        return segment.ptSegDist(posX, posY) <= GameModel.HITBOX_RADIUS;
+    }
+
+    private void traiterDemandeRevanche() {
+        peerRematchRequested = true;
+        if (onlineResultDialog != null) {
+            onlineResultDialog.markPeerRematchRequested();
+        }
+    }
+
+    private void traiterAdversaireParti() {
+        peerLeftHandled = true;
+        if (model.getPhase() == GameModel.GamePhase.FINISHED || onlineResultDialog != null) {
+            peerLeftAfterResult = true;
+            if (onlineResultDialog != null) {
+                onlineResultDialog.markPeerLeft();
+            }
+            return;
+        }
+        mainFrame.afficherAdversaireDeconnecte();
+    }
+
+    private boolean demanderRevancheEnLigne() {
+        if (localRematchRequested) {
+            return true;
+        }
+
+        localRematchRequested = onlineChannel.sendRematchRequest();
+        return localRematchRequested;
     }
 
     public boolean isAiMode() {
@@ -143,21 +226,23 @@ public class GameController {
         return aiThinking;
     }
 
+    public boolean isLocalInputBlocked() {
+        if (onlineChannel != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
+            return true;
+        }
+        return isAiTurn() || aiThinking;
+    }
+
     public boolean onPlacementValid(Flower f1, Flower f2, double posX, double posY) {
-        if (networkSession != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
+        if (onlineChannel != null && model.getJoueurCourant().getIndex() != localPlayerIndex) {
             return false;
         }
         
         boolean success = model.placerPionEtCapturer(f1, f2, posX, posY);
-        if (success && networkSession != null) {
+        if (success && onlineChannel != null) {
             int f1Index = model.getFleurs().indexOf(f1);
             int f2Index = model.getFleurs().indexOf(f2);
-            List<String> data = new ArrayList<>();
-            data.add(String.valueOf(f1Index));
-            data.add(String.valueOf(f2Index));
-            data.add(String.valueOf(posX));
-            data.add(String.valueOf(posY));
-            networkSession.sendData(data);
+            onlineChannel.sendMove(new OnlineMove(f1Index, f2Index, posX, posY));
         }
         return success;
     }
@@ -177,7 +262,7 @@ public class GameController {
     }
 
     public void annulerCoup() {
-        if (networkSession != null) return;
+        if (onlineChannel != null) return;
         if (model.getPhase() != GameModel.GamePhase.PLACING) return;
         if (!model.peutAnnuler()) return;
 
@@ -279,7 +364,7 @@ public class GameController {
         
         final Pawn finalPionLibre = pionLibre;
 
-        boardPanel.montrerIntentionIA(f1, f2, move.pawnX, move.pawnY, () -> {
+        boardPanel.montrerIntentionPlacement(f1, f2, move.pawnX, move.pawnY, () -> {
             boolean success = model.placerPionEtCapturer(f1, f2, move.pawnX, move.pawnY);
             if (success && finalPionLibre != null) {
                 boardPanel.jouerAnimationPionIA(finalPionLibre, f1, f2, this::onPlacementAnimationFinished);
@@ -298,6 +383,17 @@ public class GameController {
             if (majorite.getValue() == 1) j2Fleurs.add(majorite.getKey());
         }
 
+        GameResultDialog.PlayerFlowers[] resultats = new GameResultDialog.PlayerFlowers[]{
+            new GameResultDialog.PlayerFlowers(model.getJoueurs()[0].getName(), j1Fleurs),
+            new GameResultDialog.PlayerFlowers(model.getJoueurs()[1].getName(), j2Fleurs)
+        };
+        String texteVainqueur = vainqueur != null ? "Vainqueur : " + vainqueur.getName() : "Egalite";
+
+        if (onlineChannel != null) {
+            afficherResultatEnLigne(resultats, texteVainqueur);
+            return;
+        }
+
         GameResultDialog.Choice choix = GameResultDialog.show(
             mainFrame,
             "Résultats",
@@ -309,20 +405,35 @@ public class GameController {
         );
 
         if (choix == GameResultDialog.Choice.REPLAY) {
-            if (networkSession != null) {
-                List<String> msg = new ArrayList<>();
-                msg.add("REMATCH");
-                networkSession.sendData(msg);
-                
-                localWantsRematch = true;
-                if (opponentWantsRematch) {
-                    SwingUtilities.invokeLater(mainFrame::relancerPartie);
-                } else {
-                    SwingUtilities.invokeLater(mainFrame::afficherAttenteRematch);
-                }
-            } else {
-                SwingUtilities.invokeLater(mainFrame::relancerPartie);
-            }
+            SwingUtilities.invokeLater(mainFrame::relancerPartie);
+        } else {
+            SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
+        }
+    }
+
+    private void afficherResultatEnLigne(GameResultDialog.PlayerFlowers[] resultats, String texteVainqueur) {
+        onlineResultDialog = new OnlineGameResultDialog(
+            mainFrame,
+            "Resultats",
+            resultats,
+            texteVainqueur,
+            this::demanderRevancheEnLigne
+        );
+
+        if (peerRematchRequested) {
+            onlineResultDialog.markPeerRematchRequested();
+        }
+        if (peerLeftAfterResult) {
+            onlineResultDialog.markPeerLeft();
+        }
+
+        OnlineGameResultDialog.Choice choix = onlineResultDialog.showDialog();
+        onlineResultDialog = null;
+
+        if (choix == OnlineGameResultDialog.Choice.REPLAY) {
+            SwingUtilities.invokeLater(() -> mainFrame.relancerPartieEnLigneMemeSession(localPlayerIndex == 0));
+        } else if (choix == OnlineGameResultDialog.Choice.WAIT_FOR_PLAYER) {
+            SwingUtilities.invokeLater(mainFrame::attendreNouveauJoueurDansSession);
         } else {
             SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
         }

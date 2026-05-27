@@ -75,6 +75,9 @@ public final class BoardRenderer {
 
         drawElements(g2, null, hoveredFlower);
         drawPlacementFlowerAnimation(g2);
+        if (model.getPhase() == GameModel.GamePhase.PLACING) {
+            drawSelectionTip(g2, candidates, mousePoint);
+        }
         drawResolutionPhase(g2);
         drawWinningCounterAnimation(g2);
         wordSplash.paint(g2);
@@ -174,24 +177,29 @@ public final class BoardRenderer {
             g2.drawLine(x1, y1, x2, y2);
 
         }
+    }
 
-        if (candidates.size() > 1 && mousePoint != null) {
-            String tip = "Molette : Choisir la ligne";
-            g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
-            FontMetrics fm = g2.getFontMetrics();
-            int w = fm.stringWidth(tip) + 16;
-            int h = fm.getHeight() + 8;
-            int tx = mousePoint.x - w / 2;
-            int ty = mousePoint.y - pawnSize - h - 10;
-
-            g2.setColor(new Color(25, 23, 29, 220));
-            g2.fillRoundRect(tx, ty, w, h, 14, 14);
-            g2.setColor(new Color(255, 255, 255, 45));
-            g2.drawRoundRect(tx, ty, w - 1, h - 1, 14, 14);
-
-            g2.setColor(new Color(245, 244, 248));
-            g2.drawString(tip, tx + 8, ty + h / 2 + fm.getAscent() / 2 - 2);
+    private void drawSelectionTip(Graphics2D g2, List<FlowerPair> candidates, Point mousePoint) {
+        if (candidates.size() <= 1 || mousePoint == null) {
+            return;
         }
+
+        String tip = "Molette : Choisir la ligne";
+        int pawnSize = geometry.pawnSize();
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        FontMetrics fm = g2.getFontMetrics();
+        int w = fm.stringWidth(tip) + 16;
+        int h = fm.getHeight() + 8;
+        int tx = mousePoint.x - w / 2;
+        int ty = mousePoint.y - pawnSize - h - 10;
+
+        g2.setColor(new Color(25, 23, 29, 220));
+        g2.fillRoundRect(tx, ty, w, h, 14, 14);
+        g2.setColor(new Color(255, 255, 255, 45));
+        g2.drawRoundRect(tx, ty, w - 1, h - 1, 14, 14);
+
+        g2.setColor(new Color(245, 244, 248));
+        g2.drawString(tip, tx + 8, ty + h / 2 + fm.getAscent() / 2 - 2);
     }
 
     private void drawElements(Graphics2D g2, Flower selectedFlower, Flower hoveredFlower) {
