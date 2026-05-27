@@ -1,6 +1,7 @@
 package lacuna.model;
 
-public class Flower {
+public class Flower implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     private final FlowerColor color;
     private double x, y;
     private Player owner;

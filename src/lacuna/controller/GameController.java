@@ -31,6 +31,11 @@ public class GameController {
     private final int aiPlayerIndex;
     private final int aiDepth;
     private final OnlineGameChannel onlineChannel;
+    private final boolean p1IsAi;
+    private final int p1AiDepth;
+    private final boolean p2IsAi;
+    private final int p2AiDepth;
+    private final lacuna.network.OnlineSessionConnection networkSession;
     private final int localPlayerIndex;
     private SwingWorker<Void, OnlineGameMessage> networkWorker;
     private OnlineGameResultDialog onlineResultDialog;
@@ -44,14 +49,15 @@ public class GameController {
     private volatile boolean peerLeftHandled;
     private volatile boolean listenerEndedForResult;
 
-    public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, int aiPlayerIndex,
-            int aiDepth, OnlineGameChannel onlineChannel, int localPlayerIndex) {
+    public GameController(GameModel model, MainFrame mainFrame, BoardPanel boardPanel, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth, lacuna.network.OnlineSessionConnection networkSession, int localPlayerIndex) {
         this.model = model;
         this.mainFrame = mainFrame;
         this.boardPanel = boardPanel;
-        this.aiPlayerIndex = aiPlayerIndex;
-        this.aiDepth = aiDepth;
-        this.onlineChannel = onlineChannel;
+        this.p1IsAi = p1IsAi;
+        this.p1AiDepth = p1AiDepth;
+        this.p2IsAi = p2IsAi;
+        this.p2AiDepth = p2AiDepth;
+        this.networkSession = networkSession;
         this.localPlayerIndex = localPlayerIndex;
         
         if (onlineChannel != null) {
@@ -206,11 +212,14 @@ public class GameController {
     }
 
     public boolean isAiMode() {
-        return aiPlayerIndex >= 0;
+        return p1IsAi || p2IsAi;
     }
 
     public boolean isAiTurn() {
-        return isAiMode() && model.getJoueurCourant().getIndex() == aiPlayerIndex;
+        int currentIdx = model.getJoueurCourant().getIndex();
+        if (currentIdx == 0) return p1IsAi;
+        if (currentIdx == 1) return p2IsAi;
+        return false;
     }
 
     public boolean isAiThinking() {
@@ -277,13 +286,15 @@ public class GameController {
             aiWorker = new SwingWorker<>() {
                 @Override
                 protected AIMove doInBackground() {
-                    if (aiDepth <= 1) {
-                        return choisirCoupSimple(false);
+                    int activePlayerIndex = model.getJoueurCourant().getIndex();
+                    int activeAiDepth = (activePlayerIndex == 0) ? p1AiDepth : p2AiDepth;
+                    if (activeAiDepth <= 1) {
+                        return choisirCoupSimple(false, activePlayerIndex);
                     }
-                    if (aiDepth == 2) {
-                        return choisirCoupSimple(true);
+                    if (activeAiDepth == 2) {
+                        return choisirCoupSimple(true, activePlayerIndex);
                     }
-                    Minimax minimax = new Minimax(model, aiPlayerIndex, aiDepth, 2000);
+                    Minimax minimax = new Minimax(model, activePlayerIndex, activeAiDepth, 2000);
                     return minimax.findBestMove();
                 }
 
@@ -309,7 +320,7 @@ public class GameController {
         aiTimer.start();
     }
 
-    private AIMove choisirCoupSimple(boolean greedy) {
+    private AIMove choisirCoupSimple(boolean greedy, int activePlayerIndex) {
         lacuna.model.AI.AIState state = lacuna.model.AI.AIState.fromModel(model);
         List<AIMove> moves = new lacuna.model.AI.DefaultAIMoveGenerator(true).generateMoves(state);
         if (moves.isEmpty()) return null;
@@ -319,7 +330,7 @@ public class GameController {
         if (!greedy) {
             java.util.Collections.shuffle(moves);
             for (AIMove move : moves) {
-                if (evaluator.quickEval(state, move, aiPlayerIndex) > 0) {
+                if (evaluator.quickEval(state, move, activePlayerIndex) > 0) {
                     return move;
                 }
             }
@@ -327,10 +338,10 @@ public class GameController {
         }
 
         AIMove bestMove = moves.get(0);
-        double bestScore = evaluator.quickEval(state, bestMove, aiPlayerIndex);
+        double bestScore = evaluator.quickEval(state, bestMove, activePlayerIndex);
         for (int i = 1; i < moves.size(); i++) {
             AIMove move = moves.get(i);
-            double score = evaluator.quickEval(state, move, aiPlayerIndex);
+            double score = evaluator.quickEval(state, move, activePlayerIndex);
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;
@@ -426,5 +437,15 @@ public class GameController {
         } else {
             SwingUtilities.invokeLater(mainFrame::retourMenuPrincipal);
         }
+    }
+
+    public boolean isLocalMatch() {
+        return networkSession == null;
+    }
+
+    public void demarrerPartieAvecStarter(int starterIndex) {
+        model.setStartingPlayer(starterIndex);
+        boardPanel.afficherToastTour();
+        declencherCoupIASiNecessaire();
     }
 }

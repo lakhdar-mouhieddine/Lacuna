@@ -3,7 +3,8 @@ package lacuna.model;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Player {
+public class Player implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     private final String name;
     private final int index;
     private final List<Pawn> pawns;

@@ -23,6 +23,9 @@ public final class GameResultDialog extends JDialog {
     private Timer revealTimer;
     private long revealStartedAt;
 
+    private int winnerIndex = -1;
+    private List<FlowerColor> winnerColors;
+
     private GameResultDialog(JFrame owner, String title, PlayerFlowers[] results, String winnerText) {
         super(owner, title, true);
         setUndecorated(true);
@@ -41,27 +44,56 @@ public final class GameResultDialog extends JDialog {
 
     private JComponent createContent(String title, PlayerFlowers[] results, String winnerText) {
         card = new RoundedDialogPanel();
-        card.setLayout(new BorderLayout(0, 20));
-        card.setBorder(BorderFactory.createEmptyBorder(26, 32, 28, 32));
+        card.setLayout(new BorderLayout(0, 10));
+        card.setBorder(BorderFactory.createEmptyBorder(20, 32, 14, 32));
 
         JPanel textPanel = new JPanel();
         textPanel.setOpaque(false);
         textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
 
-        JLabel titleLabel = label(title, 26, Color.WHITE);
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        textPanel.add(titleLabel);
-        textPanel.add(Box.createVerticalStrut(16));
-
-        for (PlayerFlowers result : results) {
-            textPanel.add(playerFlowers(result));
-            textPanel.add(Box.createVerticalStrut(12));
+        this.winnerIndex = -1;
+        this.winnerColors = null;
+        if (winnerText != null && winnerText.startsWith("Vainqueur : ")) {
+            String winnerName = winnerText.substring("Vainqueur : ".length());
+            for (int i = 0; i < results.length; i++) {
+                if (results[i].playerName().equals(winnerName)) {
+                    this.winnerIndex = i;
+                    this.winnerColors = results[i].colors();
+                    break;
+                }
+            }
         }
 
-        textPanel.add(Box.createVerticalStrut(4));
-        JLabel winner = label(winnerText, 20, new Color(235, 203, 93));
-        winner.setAlignmentX(Component.CENTER_ALIGNMENT);
-        textPanel.add(winner);
+        if (winnerIndex != -1) {
+            JLabel titleLabel = label(title, 26, Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            textPanel.add(titleLabel);
+            textPanel.add(Box.createVerticalStrut(14));
+
+            JLabel winner = label(winnerText, 22, new Color(235, 203, 93));
+            winner.setAlignmentX(Component.CENTER_ALIGNMENT);
+            textPanel.add(winner);
+
+            textPanel.add(Box.createVerticalStrut(158));
+
+            int loserIndex = 1 - winnerIndex;
+            textPanel.add(playerFlowers(results[loserIndex], loserIndex));
+        } else {
+            JLabel titleLabel = label(title, 26, Color.WHITE);
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            textPanel.add(titleLabel);
+            textPanel.add(Box.createVerticalStrut(16));
+
+            for (int i = 0; i < results.length; i++) {
+                textPanel.add(playerFlowers(results[i], i));
+                textPanel.add(Box.createVerticalStrut(12));
+            }
+
+            textPanel.add(Box.createVerticalStrut(4));
+            JLabel winner = label(winnerText, 20, new Color(235, 203, 93));
+            winner.setAlignmentX(Component.CENTER_ALIGNMENT);
+            textPanel.add(winner);
+        }
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
         buttons.setOpaque(false);
@@ -79,13 +111,14 @@ public final class GameResultDialog extends JDialog {
         return card;
     }
 
-    private JComponent playerFlowers(PlayerFlowers result) {
+    private JComponent playerFlowers(PlayerFlowers result, int playerIndex) {
         JPanel panel = new JPanel();
         panel.setOpaque(false);
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel player = label(result.playerName() + " remporte", 16, new Color(215, 213, 222));
+        String textStr = result.playerName() + " remporte";
+        JLabel player = label(textStr, 16, new Color(215, 213, 222));
         player.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(player);
         panel.add(Box.createVerticalStrut(6));
@@ -159,12 +192,12 @@ public final class GameResultDialog extends JDialog {
         };
     }
 
-    private static final class RoundedDialogPanel extends JPanel {
+    private final class RoundedDialogPanel extends JPanel {
         private float revealProgress = 1f;
 
         RoundedDialogPanel() {
             setOpaque(false);
-            setPreferredSize(new Dimension(500, 340));
+            setPreferredSize(new Dimension(540, 420));
         }
 
         private void setRevealProgress(float revealProgress) {
@@ -197,6 +230,28 @@ public final class GameResultDialog extends JDialog {
             g2.fillRoundRect(0, 0, getWidth(), getHeight(), 26, 26);
             g2.setColor(new Color(255, 255, 255, 28));
             g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 26, 26);
+
+            if (winnerIndex != -1 && winnerColors != null) {
+                int cx = getWidth() / 2;
+                int cy = getHeight() / 2 - 30;
+
+                int pawnSize = 60;
+                GameAssets.drawFit(g2, GameAssets.pawn(winnerIndex), cx, cy - 2, pawnSize);
+
+                int N = winnerColors.size();
+                int flowerSize = 30;
+                double radius = 50.0;
+
+                for (int j = 0; j < N; j++) {
+                    FlowerColor color = winnerColors.get(j);
+                    double angle = j * 2.0 * Math.PI / (N == 0 ? 1 : N);
+                    int tx = cx + (int) (radius * Math.cos(angle));
+                    int ty = cy + (int) (radius * Math.sin(angle)) - 2;
+
+                    GameAssets.drawFit(g2, GameAssets.flower(color), tx, ty, flowerSize);
+                }
+            }
+
             g2.dispose();
             super.paintComponent(g);
         }

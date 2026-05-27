@@ -6,7 +6,8 @@ import lacuna.network.OnlineFlowerSnapshot;
 import java.util.*;
 import java.awt.geom.Line2D;
 
-public class GameModel {
+public class GameModel implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     public static final int NUM_COLORS = FlowerColor.values().length;
     public static final int FLOWERS_PER_COLOR = 7;
     public static final int NUM_FLOWERS = NUM_COLORS * FLOWERS_PER_COLOR;
@@ -22,8 +23,9 @@ public class GameModel {
     private final Player[] players;
     private int currentPlayerIndex;
     private GamePhase phase;
+    private long seed;
 
-    private final List<ModelListener> listeners = new ArrayList<>();
+    private transient List<ModelListener> listeners = new ArrayList<>();
     private final java.util.Deque<MoveRecord> moveHistory = new java.util.ArrayDeque<>();
 
     public enum GamePhase {
@@ -33,22 +35,46 @@ public class GameModel {
     }
 
     public GameModel(String name1, String name2) {
-        this(name1, name2, new Random().nextLong());
+        this(name1, name2, 0, new Random().nextLong());
     }
 
     public GameModel(String name1, String name2, long seed) {
+        this(name1, name2, 0, seed);
+    }
+
+    public GameModel(String name1, String name2, int startingPlayerIndex, long seed) {
+        this(name1, name2, startingPlayerIndex, seed, false);
+    }
+
+    public GameModel(String name1, String name2, int startingPlayerIndex, long seed, boolean deferStart) {
         flowers = new ArrayList<>(NUM_FLOWERS);
         players = new Player[]{
             new Player(name1, 0),
             new Player(name2, 1)
         };
-        currentPlayerIndex = 0;
+        currentPlayerIndex = startingPlayerIndex;
         phase = GamePhase.PLACING;
+        this.seed = seed;
 
         Random rng = new Random(seed);
         genererFleursTapis(rng);
         creerPions();
-        assignRandomStartingFlower(rng);
+        if (!deferStart) {
+            assignRandomStartingFlower(rng, startingPlayerIndex);
+        }
+    }
+
+    public void setStartingPlayer(int index) {
+        this.currentPlayerIndex = index;
+        if (flowers.isEmpty()) return;
+        Random rng = new Random();
+        Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
+        players[index].captureFlower(startingFlower);
+        notifyListeners();
+    }
+
+    public boolean estNouvellePartieNonCommencee() {
+        return players[0].getCapturedFlowers().isEmpty() && players[1].getCapturedFlowers().isEmpty();
     }
 
     private GameModel(String name1, String name2, OnlineBoardSnapshot snapshot) {
@@ -121,10 +147,10 @@ public class GameModel {
         }
     }
 
-    private void assignRandomStartingFlower(Random rng) {
+    private void assignRandomStartingFlower(Random rng, int startingPlayerIndex) {
         if (flowers.isEmpty()) return;
         Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
-        players[0].captureFlower(startingFlower);
+        players[startingPlayerIndex].captureFlower(startingFlower);
     }
 
     public OnlineBoardSnapshot toOnlineBoardSnapshot() {
@@ -360,7 +386,13 @@ public class GameModel {
     public Player getJoueurCourant() { return players[currentPlayerIndex]; }
     public GamePhase getPhase() { return phase; }
 
-    private static final class MoveRecord {
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        listeners = new ArrayList<>();
+    }
+
+    private static final class MoveRecord implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
         final Player player;
         final Pawn pawn;
         final Flower flower1;

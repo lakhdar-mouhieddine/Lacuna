@@ -43,12 +43,6 @@ public class BoardPanel extends JPanel implements ModelListener {
         }
     }
 
-
-
-    private static final int LETS_PLAY_SPLASH_MS = 3200;
-    private static final int HOLD_UP_SPLASH_MS = 3200;
-    private static final int GAME_OVER_SPLASH_MS = 3200;
-
     private final GameModel model;
     private final BoardGeometry geometry;
     private final WordSplashAnimator wordSplash;
@@ -63,6 +57,9 @@ public class BoardPanel extends JPanel implements ModelListener {
     private Flower hoveredFlower;
     private Point mousePoint;
     private Runnable onResolutionFinished;
+
+    private float winAnimProgress = 0f;
+    private Timer winAnimTimer;
 
     private List<FlowerPair> candidatePairs = new ArrayList<>();
     private int selectedPairIndex = 0;
@@ -139,8 +136,19 @@ public class BoardPanel extends JPanel implements ModelListener {
     public void addNotify() {
         super.addNotify();
         cylinderIntro.start(geometry, () -> {
-            if (controller != null) {
-                controller.declencherCoupIASiNecessaire();
+            if (controller != null && controller.isLocalMatch() && model.estNouvellePartieNonCommencee()) {
+                JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                String name1 = model.getJoueurs()[0].getName();
+                String name2 = model.getJoueurs()[1].getName();
+                int starterIndex = StartingPlayerDialog.show(frame, name1, name2);
+                if (starterIndex == -1) {
+                    starterIndex = 0;
+                }
+                controller.demarrerPartieAvecStarter(starterIndex);
+            } else {
+                if (controller != null) {
+                    controller.declencherCoupIASiNecessaire();
+                }
             }
         });
     }
@@ -153,6 +161,10 @@ public class BoardPanel extends JPanel implements ModelListener {
         resolution.clear();
         wordSplash.stop();
         toast.stop();
+        if (winAnimTimer != null) {
+            winAnimTimer.stop();
+            winAnimTimer = null;
+        }
         super.removeNotify();
     }
 
@@ -337,16 +349,63 @@ public class BoardPanel extends JPanel implements ModelListener {
         }
     }
 
+    public void afficherToastTour() {
+        if (model.getPhase() == GameModel.GamePhase.PLACING
+                && (controller == null || !controller.isAiTurn())) {
+            toast.show("C'est ton tour, " + model.getJoueurCourant().getName() + " !", false);
+        }
+    }
+
     private void finishResolutionAnimation() {
         resolution.clear();
         wordSplash.stop();
         model.terminerResolution();
 
-        Runnable finished = onResolutionFinished;
+        final Runnable finished = onResolutionFinished;
         onResolutionFinished = null;
-        if (finished != null) {
-            finished.run();
+
+        Player vainqueur = model.getVainqueur();
+        if (vainqueur != null) {
+            winAnimProgress = 0f;
+            int duration = 2000; // 2 seconds
+            long startTime = System.currentTimeMillis();
+            
+            winAnimTimer = new Timer(16, e -> {
+                long elapsed = System.currentTimeMillis() - startTime;
+                float progress = Math.min(1f, elapsed / (float) duration);
+                winAnimProgress = progress;
+                
+                // Fade player panels
+                Window win = SwingUtilities.getWindowAncestor(this);
+                if (win instanceof MainFrame frame) {
+                    if (frame.getPanelTop() != null) frame.getPanelTop().setAlpha(1f - progress);
+                    if (frame.getPanelBottom() != null) frame.getPanelBottom().setAlpha(1f - progress);
+                }
+                
+                repaint();
+                
+                if (progress >= 1f) {
+                    winAnimTimer.stop();
+                    winAnimTimer = null;
+                    Timer delayTimer = new Timer(500, ev -> {
+                        if (finished != null) {
+                            finished.run();
+                        }
+                    });
+                    delayTimer.setRepeats(false);
+                    delayTimer.start();
+                }
+            });
+            winAnimTimer.start();
+        } else {
+            if (finished != null) {
+                finished.run();
+            }
         }
+    }
+
+    public float getWinAnimProgress() {
+        return winAnimProgress;
     }
 
     private Flower flowerAt(int x, int y) {
