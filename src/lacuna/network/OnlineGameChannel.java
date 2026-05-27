@@ -13,6 +13,7 @@ public final class OnlineGameChannel {
     private static final String BOARD_REJECTED = "BOARD_REJECTED";
     private static final String MOVE = "MOVE";
     private static final String REMATCH_REQUEST = "REMATCH_REQUEST";
+    private static final String STARTING_PLAYER = "STARTING_PLAYER";
 
     private final OnlineSessionConnection connection;
 
@@ -40,6 +41,7 @@ public final class OnlineGameChannel {
         lines.add(BOARD);
         lines.add(String.valueOf(snapshot.getFlowers().size()));
         lines.add(String.valueOf(snapshot.getStartingCapturedFlowerIndex()));
+        lines.add(String.valueOf(snapshot.getStartingPlayerIndex()));
         for (OnlineFlowerSnapshot flower : snapshot.getFlowers()) {
             lines.add(flower.getColor().name() + " " + flower.getX() + " " + flower.getY());
         }
@@ -83,6 +85,13 @@ public final class OnlineGameChannel {
         return connection.sendData(lines);
     }
 
+    public boolean sendStartingPlayer(int index) {
+        List<String> lines = new ArrayList<>();
+        lines.add(STARTING_PLAYER);
+        lines.add(String.valueOf(index));
+        return connection.sendData(lines);
+    }
+
     public OnlineGameMessage receiveMessage() throws IOException {
         List<String> lines = connection.receiveData();
         if (lines.isEmpty()) {
@@ -108,6 +117,9 @@ public final class OnlineGameChannel {
         if (REMATCH_REQUEST.equals(type)) {
             return OnlineGameMessage.rematchRequest();
         }
+        if (STARTING_PLAYER.equals(type)) {
+            return OnlineGameMessage.startingPlayer(lines.size() >= 2 ? parseInt(lines.get(1), "starting player") : 0);
+        }
 
         throw new IOException("Unknown online game message: " + type);
     }
@@ -119,16 +131,22 @@ public final class OnlineGameChannel {
 
         int flowerCount = parseInt(lines.get(1), "flower count");
         int startingFlowerIndex = parseInt(lines.get(2), "starting flower index");
-        if (lines.size() != 3 + flowerCount) {
+        
+        int startingPlayerIndex = 0;
+        int headerSize = 3;
+        if (lines.size() == 4 + flowerCount) {
+            startingPlayerIndex = parseInt(lines.get(3), "starting player index");
+            headerSize = 4;
+        } else if (lines.size() != 3 + flowerCount) {
             throw new IOException("Board flower count does not match message size");
         }
 
         List<OnlineFlowerSnapshot> flowers = new ArrayList<>();
         for (int i = 0; i < flowerCount; i++) {
-            flowers.add(readFlower(lines.get(3 + i)));
+            flowers.add(readFlower(lines.get(headerSize + i)));
         }
 
-        return new OnlineBoardSnapshot(flowers, startingFlowerIndex);
+        return new OnlineBoardSnapshot(flowers, startingFlowerIndex, startingPlayerIndex);
     }
 
     private static OnlineFlowerSnapshot readFlower(String line) throws IOException {

@@ -168,7 +168,7 @@ public class MainFrame extends JFrame {
                 try {
                     if (isHost) {
                         String peerName = cleanDisplayName(sessionConnection.getPeerName(), "Adversaire");
-                        GameModel modele = new GameModel(myName, peerName);
+                        GameModel modele = new GameModel(myName, peerName, 0, new java.util.Random().nextLong(), true);
                         if (!channel.sendPlayerName(myName)) {
                             return OnlineStartupResult.failure("Impossible d'envoyer le nom du joueur.");
                         }

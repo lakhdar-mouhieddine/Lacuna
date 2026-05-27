@@ -24,6 +24,7 @@ public class GameModel implements java.io.Serializable {
     private int currentPlayerIndex;
     private GamePhase phase;
     private long seed;
+    private int startingCapturedFlowerIndex = -1;
 
     private transient List<ModelListener> listeners = new ArrayList<>();
     private final java.util.Deque<MoveRecord> moveHistory = new java.util.ArrayDeque<>();
@@ -62,15 +63,24 @@ public class GameModel implements java.io.Serializable {
         creerPions();
         if (!deferStart) {
             assignRandomStartingFlower(rng, startingPlayerIndex);
+        } else {
+            if (!flowers.isEmpty()) {
+                this.startingCapturedFlowerIndex = rng.nextInt(flowers.size());
+            }
         }
     }
 
     public void setStartingPlayer(int index) {
         this.currentPlayerIndex = index;
         if (flowers.isEmpty()) return;
-        Random rng = new Random();
-        Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
-        players[index].captureFlower(startingFlower);
+        if (startingCapturedFlowerIndex >= 0 && startingCapturedFlowerIndex < flowers.size()) {
+            players[index].captureFlower(flowers.get(startingCapturedFlowerIndex));
+        } else {
+            Random rng = new Random();
+            int idx = rng.nextInt(flowers.size());
+            this.startingCapturedFlowerIndex = idx;
+            players[index].captureFlower(flowers.get(idx));
+        }
         notifyListeners();
     }
 
@@ -89,15 +99,20 @@ public class GameModel implements java.io.Serializable {
             new Player(name1, 0),
             new Player(name2, 1)
         };
-        currentPlayerIndex = 0;
+        currentPlayerIndex = 0; // Default
         phase = GamePhase.PLACING;
+        this.startingCapturedFlowerIndex = snapshot.getStartingCapturedFlowerIndex();
 
         for (OnlineFlowerSnapshot flower : snapshot.getFlowers()) {
             flowers.add(new Flower(flower.getColor(), flower.getX(), flower.getY()));
         }
 
         creerPions();
-        players[0].captureFlower(flowers.get(snapshot.getStartingCapturedFlowerIndex()));
+
+        int startingPlayer = snapshot.getStartingPlayerIndex();
+        if (startingPlayer >= 0 && startingPlayer <= 1) {
+            setStartingPlayer(startingPlayer);
+        }
     }
 
     public static GameModel fromOnlineBoardSnapshot(String name1, String name2, OnlineBoardSnapshot snapshot) {
@@ -150,8 +165,9 @@ public class GameModel implements java.io.Serializable {
 
     private void assignRandomStartingFlower(Random rng, int startingPlayerIndex) {
         if (flowers.isEmpty()) return;
-        Flower startingFlower = flowers.get(rng.nextInt(flowers.size()));
-        players[startingPlayerIndex].captureFlower(startingFlower);
+        int idx = rng.nextInt(flowers.size());
+        this.startingCapturedFlowerIndex = idx;
+        players[startingPlayerIndex].captureFlower(flowers.get(idx));
     }
 
     public OnlineBoardSnapshot toOnlineBoardSnapshot() {
@@ -160,16 +176,19 @@ public class GameModel implements java.io.Serializable {
             snapshots.add(new OnlineFlowerSnapshot(flower.getColor(), flower.getX(), flower.getY()));
         }
 
-        int startingCapturedFlowerIndex = -1;
-        for (Flower flower : players[0].getCapturedFlowers()) {
-            int index = flowers.indexOf(flower);
-            if (index >= 0) {
-                startingCapturedFlowerIndex = index;
+        int startingCapturedFlowerIndex = this.startingCapturedFlowerIndex;
+        int startingPlayerIndex = -1;
+
+        for (int p = 0; p < players.length; p++) {
+            if (!players[p].getCapturedFlowers().isEmpty()) {
+                startingPlayerIndex = p;
+                Flower startingFlower = players[p].getCapturedFlowers().iterator().next();
+                startingCapturedFlowerIndex = flowers.indexOf(startingFlower);
                 break;
             }
         }
 
-        return new OnlineBoardSnapshot(snapshots, startingCapturedFlowerIndex);
+        return new OnlineBoardSnapshot(snapshots, startingCapturedFlowerIndex, startingPlayerIndex);
     }
 
     public static String validateOnlineBoardSnapshot(OnlineBoardSnapshot snapshot) {
@@ -185,6 +204,11 @@ public class GameModel implements java.io.Serializable {
         int startingIndex = snapshot.getStartingCapturedFlowerIndex();
         if (startingIndex < 0 || startingIndex >= NUM_FLOWERS) {
             return "Fleur de depart invalide.";
+        }
+
+        int startingPlayer = snapshot.getStartingPlayerIndex();
+        if (startingPlayer < -1 || startingPlayer > 1) {
+            return "Joueur de depart invalide.";
         }
 
         EnumMap<FlowerColor, Integer> colorCounts = new EnumMap<>(FlowerColor.class);

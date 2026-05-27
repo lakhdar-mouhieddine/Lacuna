@@ -100,6 +100,8 @@ public class GameController {
                         traiterDemandeRevanche();
                     } else if (message.getType() == OnlineGameMessage.Type.PEER_LEFT) {
                         traiterAdversaireParti();
+                    } else if (message.getType() == OnlineGameMessage.Type.STARTING_PLAYER) {
+                        traiterStartingPlayer(message.getStartingPlayerIndex());
                     }
                 }
             }
@@ -200,6 +202,12 @@ public class GameController {
             return;
         }
         mainFrame.afficherAdversaireDeconnecte();
+    }
+
+    private void traiterStartingPlayer(int starterIndex) {
+        model.setStartingPlayer(starterIndex);
+        boardPanel.afficherToastTour();
+        declencherCoupIASiNecessaire();
     }
 
     private boolean demanderRevancheEnLigne() {
@@ -470,7 +478,14 @@ public class GameController {
 
     public void demarrerPartieAvecStarter(int starterIndex) {
         model.setStartingPlayer(starterIndex);
+        if (onlineChannel != null) {
+            onlineChannel.sendStartingPlayer(starterIndex);
+        }
         boardPanel.afficherToastTour();
         declencherCoupIASiNecessaire();
+    }
+
+    public boolean isHost() {
+        return onlineChannel != null && localPlayerIndex == 0;
     }
 }

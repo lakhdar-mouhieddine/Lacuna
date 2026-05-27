@@ -8,7 +8,8 @@ public final class OnlineGameMessage {
         BOARD_REJECTED,
         MOVE,
         REMATCH_REQUEST,
-        PEER_LEFT
+        PEER_LEFT,
+        STARTING_PLAYER
     }
 
     private final Type type;
@@ -16,41 +17,47 @@ public final class OnlineGameMessage {
     private final OnlineBoardSnapshot board;
     private final OnlineMove move;
     private final String reason;
+    private final int startingPlayerIndex;
 
-    private OnlineGameMessage(Type type, String playerName, OnlineBoardSnapshot board, OnlineMove move, String reason) {
+    private OnlineGameMessage(Type type, String playerName, OnlineBoardSnapshot board, OnlineMove move, String reason, int startingPlayerIndex) {
         this.type = type;
         this.playerName = playerName;
         this.board = board;
         this.move = move;
         this.reason = reason;
+        this.startingPlayerIndex = startingPlayerIndex;
     }
 
     static OnlineGameMessage playerName(String playerName) {
-        return new OnlineGameMessage(Type.PLAYER_NAME, playerName, null, null, "");
+        return new OnlineGameMessage(Type.PLAYER_NAME, playerName, null, null, "", -1);
     }
 
     static OnlineGameMessage board(OnlineBoardSnapshot board) {
-        return new OnlineGameMessage(Type.BOARD, "", board, null, "");
+        return new OnlineGameMessage(Type.BOARD, "", board, null, "", -1);
     }
 
     static OnlineGameMessage boardAccepted() {
-        return new OnlineGameMessage(Type.BOARD_ACCEPTED, "", null, null, "");
+        return new OnlineGameMessage(Type.BOARD_ACCEPTED, "", null, null, "", -1);
     }
 
     static OnlineGameMessage boardRejected(String reason) {
-        return new OnlineGameMessage(Type.BOARD_REJECTED, "", null, null, reason);
+        return new OnlineGameMessage(Type.BOARD_REJECTED, "", null, null, reason, -1);
     }
 
     static OnlineGameMessage move(OnlineMove move) {
-        return new OnlineGameMessage(Type.MOVE, "", null, move, "");
+        return new OnlineGameMessage(Type.MOVE, "", null, move, "", -1);
     }
 
     static OnlineGameMessage rematchRequest() {
-        return new OnlineGameMessage(Type.REMATCH_REQUEST, "", null, null, "");
+        return new OnlineGameMessage(Type.REMATCH_REQUEST, "", null, null, "", -1);
     }
 
     public static OnlineGameMessage peerLeft() {
-        return new OnlineGameMessage(Type.PEER_LEFT, "", null, null, "");
+        return new OnlineGameMessage(Type.PEER_LEFT, "", null, null, "", -1);
+    }
+
+    static OnlineGameMessage startingPlayer(int startingPlayerIndex) {
+        return new OnlineGameMessage(Type.STARTING_PLAYER, "", null, null, "", startingPlayerIndex);
     }
 
     public Type getType() {
@@ -71,5 +78,9 @@ public final class OnlineGameMessage {
 
     public String getReason() {
         return reason;
+    }
+
+    public int getStartingPlayerIndex() {
+        return startingPlayerIndex;
     }
 }

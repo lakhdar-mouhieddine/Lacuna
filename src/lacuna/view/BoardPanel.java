@@ -136,15 +136,19 @@ public class BoardPanel extends JPanel implements ModelListener {
     public void addNotify() {
         super.addNotify();
         cylinderIntro.start(geometry, () -> {
-            if (controller != null && controller.isLocalMatch() && model.estNouvellePartieNonCommencee()) {
-                JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-                String name1 = model.getJoueurs()[0].getName();
-                String name2 = model.getJoueurs()[1].getName();
-                int starterIndex = StartingPlayerDialog.show(frame, name1, name2);
-                if (starterIndex == -1) {
-                    starterIndex = 0;
+            if (controller != null && model.estNouvellePartieNonCommencee()) {
+                if (controller.isLocalMatch() || controller.isHost()) {
+                    JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                    String name1 = model.getJoueurs()[0].getName();
+                    String name2 = model.getJoueurs()[1].getName();
+                    int starterIndex = StartingPlayerDialog.show(frame, name1, name2);
+                    if (starterIndex == -1) {
+                        starterIndex = 0;
+                    }
+                    controller.demarrerPartieAvecStarter(starterIndex);
+                } else {
+                    controller.declencherCoupIASiNecessaire();
                 }
-                controller.demarrerPartieAvecStarter(starterIndex);
             } else {
                 if (controller != null) {
                     controller.declencherCoupIASiNecessaire();
