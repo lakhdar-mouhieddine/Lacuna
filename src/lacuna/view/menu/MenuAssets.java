@@ -13,6 +13,22 @@ final class MenuAssets {
     }
 
     static BufferedImage load(String name) {
+        String resourcePath1 = "/assets/main-menu/" + name.replace('\\', '/');
+        try (java.io.InputStream stream1 = MenuAssets.class.getResourceAsStream(resourcePath1)) {
+            if (stream1 != null) {
+                return ImageIO.read(stream1);
+            }
+        } catch (IOException ignored) {
+        }
+
+        String resourcePath2 = "/assets/" + name.replace('\\', '/');
+        try (java.io.InputStream stream2 = MenuAssets.class.getResourceAsStream(resourcePath2)) {
+            if (stream2 != null) {
+                return ImageIO.read(stream2);
+            }
+        } catch (IOException ignored) {
+        }
+
         List<Path> candidates = List.of(
             Path.of("assets", "main-menu", name),
             Path.of("assets", name),

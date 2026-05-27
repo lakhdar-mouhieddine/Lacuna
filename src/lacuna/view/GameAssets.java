@@ -111,6 +111,14 @@ public final class GameAssets {
     }
 
     private static BufferedImage load(String name) {
+        String resourcePath = "/assets/" + name.replace('\\', '/');
+        try (java.io.InputStream stream = GameAssets.class.getResourceAsStream(resourcePath)) {
+            if (stream != null) {
+                return ImageIO.read(stream);
+            }
+        } catch (IOException ignored) {
+        }
+
         List<Path> candidates = List.of(
                 Path.of("assets", name),
                 Path.of("lacuna", "assets", name),
