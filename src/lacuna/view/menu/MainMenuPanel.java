@@ -54,7 +54,6 @@ public class MainMenuPanel extends JPanel {
     private final PrimaryButton playButton;
     private LacunaServerClient serverClient;
     private final SecondaryButton loadGameButton;
-    private final LacunaServerClient serverClient;
     private ProductArtPanel artPanel;
 
     private ToggleSwitch aiVsAiSwitch;
@@ -183,7 +182,7 @@ public class MainMenuPanel extends JPanel {
         controls.setPreferredSize(new Dimension(CONTROLS_WIDTH, 590));
         controls.setMinimumSize(new Dimension(CONTROLS_WIDTH, 0));
 
-        controls.add(Box.createVerticalStrut(58));
+        controls.add(Box.createVerticalGlue());
         controls.add(MenuTheme.label("Mode de jeu", 16, MenuTheme.MUTED_TEXT));
         controls.add(Box.createVerticalStrut(10));
         controls.add(modeSelect);

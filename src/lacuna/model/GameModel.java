@@ -27,6 +27,7 @@ public class GameModel implements java.io.Serializable {
 
     private transient List<ModelListener> listeners = new ArrayList<>();
     private final java.util.Deque<MoveRecord> moveHistory = new java.util.ArrayDeque<>();
+    private transient java.util.Deque<MoveRecord> redoHistory = new java.util.ArrayDeque<>();
 
     public enum GamePhase {
         PLACING,
@@ -263,7 +264,8 @@ public class GameModel implements java.io.Serializable {
         }
         if (pionLibre == null) return false;
 
-        moveHistory.push(new MoveRecord(courant, pionLibre, f1, f2));
+        moveHistory.push(new MoveRecord(courant, pionLibre, f1, f2, px, py));
+        redoHistory.clear();
 
         pionLibre.place(px, py);
         courant.incrementPawnsPlaced();
@@ -279,6 +281,7 @@ public class GameModel implements java.io.Serializable {
         if (moveHistory.isEmpty() || phase != GamePhase.PLACING) return false;
 
         MoveRecord move = moveHistory.pop();
+        redoHistory.push(move);
         move.player.uncaptureFlower(move.flower1);
         move.player.uncaptureFlower(move.flower2);
         move.pawn.unplace();
@@ -291,6 +294,25 @@ public class GameModel implements java.io.Serializable {
 
     public boolean peutAnnuler() {
         return !moveHistory.isEmpty() && phase == GamePhase.PLACING;
+    }
+
+    public boolean refaireDernierCoup() {
+        if (redoHistory.isEmpty() || phase != GamePhase.PLACING) return false;
+
+        MoveRecord move = redoHistory.pop();
+        moveHistory.push(move);
+        move.pawn.place(move.pawnX, move.pawnY);
+        move.player.incrementPawnsPlaced();
+        move.player.captureFlower(move.flower1);
+        move.player.captureFlower(move.flower2);
+
+        avancerTour();
+        notifyListeners();
+        return true;
+    }
+
+    public boolean peutRefaire() {
+        return !redoHistory.isEmpty() && phase == GamePhase.PLACING;
     }
 
     private void avancerTour() {
@@ -389,6 +411,7 @@ public class GameModel implements java.io.Serializable {
     private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
         in.defaultReadObject();
         listeners = new ArrayList<>();
+        redoHistory = new java.util.ArrayDeque<>();
     }
 
     private static final class MoveRecord implements java.io.Serializable {
@@ -397,12 +420,16 @@ public class GameModel implements java.io.Serializable {
         final Pawn pawn;
         final Flower flower1;
         final Flower flower2;
+        final double pawnX;
+        final double pawnY;
 
-        MoveRecord(Player player, Pawn pawn, Flower flower1, Flower flower2) {
+        MoveRecord(Player player, Pawn pawn, Flower flower1, Flower flower2, double pawnX, double pawnY) {
             this.player = player;
             this.pawn = pawn;
             this.flower1 = flower1;
             this.flower2 = flower2;
+            this.pawnX = pawnX;
+            this.pawnY = pawnY;
         }
     }
 }

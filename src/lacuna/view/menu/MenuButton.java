@@ -14,11 +14,19 @@ class MenuButton extends JButton {
         this.colorEnd = colorEnd;
         MenuTheme.size(this, 380, 54, 420, 54);
         setFont(new Font("Segoe UI", Font.BOLD, 18));
-        setForeground(Color.WHITE);
         setFocusPainted(false);
         setContentAreaFilled(false);
         setBorderPainted(false);
-        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    }
+
+    @Override
+    public Color getForeground() {
+        return isEnabled() ? Color.WHITE : new Color(170, 168, 178);
+    }
+
+    @Override
+    public Cursor getCursor() {
+        return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
     }
 
     void prepare(String text, boolean enabled, boolean visible) {
@@ -85,11 +93,19 @@ class SmallMenuButton extends JButton {
         this.colorEnd = colorEnd;
         MenuTheme.size(this, 88, 30, 88, 30);
         setFont(new Font("Segoe UI", Font.BOLD, 12));
-        setForeground(Color.WHITE);
         setFocusPainted(false);
         setContentAreaFilled(false);
         setBorderPainted(false);
-        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    }
+
+    @Override
+    public Color getForeground() {
+        return isEnabled() ? Color.WHITE : new Color(170, 168, 178);
+    }
+
+    @Override
+    public Cursor getCursor() {
+        return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
     }
 
     @Override

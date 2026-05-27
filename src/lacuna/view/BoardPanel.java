@@ -197,6 +197,13 @@ public class BoardPanel extends JPanel implements ModelListener {
         repaint();
     }
 
+    public void onRedoPerformed() {
+        clearSelection();
+        lastPhantomPair = null;
+        toast.show("Coup refait !", true);
+        repaint();
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);

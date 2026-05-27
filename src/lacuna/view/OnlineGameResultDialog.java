@@ -272,11 +272,19 @@ public final class OnlineGameResultDialog extends JDialog {
             this.primary = primary;
             setPreferredSize(new Dimension(primary ? 140 : 180, 44));
             setFont(new Font("Segoe UI", Font.BOLD, 15));
-            setForeground(Color.WHITE);
             setFocusPainted(false);
             setContentAreaFilled(false);
             setBorderPainted(false);
-            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        }
+
+        @Override
+        public Color getForeground() {
+            return isEnabled() ? Color.WHITE : new Color(170, 168, 178);
+        }
+
+        @Override
+        public Cursor getCursor() {
+            return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
         }
 
         @Override

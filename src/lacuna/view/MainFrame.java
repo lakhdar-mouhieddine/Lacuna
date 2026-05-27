@@ -23,6 +23,14 @@ public class MainFrame extends JFrame {
     private PlayerPanel panelBottom;
     private GameController controleur;
     private TutorialOverlay tutorialOverlay;
+
+    private JButton undoButton;
+    private JButton redoButton;
+    private JButton saveButton;
+    private JButton loadButton;
+    private JButton rejouerButton;
+    private JButton helpButton;
+    private JButton quitButton;
     private String lastNom1;
     private String lastNom2;
     private boolean lastP1IsAi;
@@ -82,7 +90,7 @@ public class MainFrame extends JFrame {
     private void demarrerPartieLocale(String nom1, String nom2) {
         fermerSessionEnLigneActuelle();
         isOnlineSession = false;
-        construireInterface(nom1, nom2, false, 0, false, 0, 0, null, -1);
+        construireInterface(nom1, nom2, false, 0, false, 0, null, -1);
     }
 
     private void demarrerPartieAvecIA(String nomJoueur, String niveau) {
@@ -97,7 +105,7 @@ public class MainFrame extends JFrame {
             depth = 5;
             iaName = "IA (Difficile)";
         }
-        construireInterface(iaName, nomJoueur, true, depth, false, 0, 0, null, -1);
+        construireInterface(iaName, nomJoueur, true, depth, false, 0, null, -1);
     }
 
     private void demarrerPartieAiVsAi(String level1, String level2) {
@@ -122,7 +130,7 @@ public class MainFrame extends JFrame {
             depth2 = 5;
             ia2Name = "IA 2 (Difficile)";
         }
-        construireInterface(ia1Name, ia2Name, true, depth1, true, depth2, 0, null, -1);
+        construireInterface(ia1Name, ia2Name, true, depth1, true, depth2, null, -1);
     }
 
     private void afficherSessionRejointe(OnlineSessionConnection sessionConnection) {
@@ -146,8 +154,10 @@ public class MainFrame extends JFrame {
 
         lastNom1 = isHost ? myName : "Adversaire";
         lastNom2 = isHost ? "Adversaire" : myName;
-        lastAiPlayerIndex = -1;
-        lastAiDepth = 0;
+        lastP1IsAi = false;
+        lastP1AiDepth = 0;
+        lastP2IsAi = false;
+        lastP2AiDepth = 0;
 
         afficherPreparationEnLigne("Chargement de la partie...");
 
@@ -226,7 +236,7 @@ public class MainFrame extends JFrame {
                 }
 
                 if (result.isSuccess()) {
-                    afficherInterfaceJeu(result.model, -1, 0, result.channel, result.localPlayerIndex);
+                    afficherInterfaceJeu(result.model, false, 0, false, 0, result.channel, result.localPlayerIndex);
                     return;
                 }
 
@@ -308,49 +318,89 @@ public class MainFrame extends JFrame {
         repaint();
     }
 
-    private void construireInterface(String nom1, String nom2, int aiPlayerIndex, int aiDepth,
+    private void construireInterface(String nom1, String nom2, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
             OnlineGameChannel onlineChannel, int localPlayerIndex) {
         this.lastNom1 = nom1;
         this.lastNom2 = nom2;
-        this.lastAiPlayerIndex = aiPlayerIndex;
-        this.lastAiDepth = aiDepth;
+        this.lastP1IsAi = p1IsAi;
+        this.lastP1AiDepth = p1AiDepth;
+        this.lastP2IsAi = p2IsAi;
+        this.lastP2AiDepth = p2AiDepth;
 
-        afficherInterfaceJeu(new GameModel(nom1, nom2), aiPlayerIndex, aiDepth, onlineChannel, localPlayerIndex);
+        GameModel gameModel;
+        if (onlineChannel == null) {
+            gameModel = new GameModel(nom1, nom2, 0, new java.util.Random().nextLong(), true);
+        } else {
+            gameModel = new GameModel(nom1, nom2);
+        }
+
+        afficherInterfaceJeu(gameModel, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth, onlineChannel, localPlayerIndex);
     }
 
-    private void afficherInterfaceJeu(GameModel modele, int aiPlayerIndex, int aiDepth,
+    private void afficherInterfaceJeu(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth,
             OnlineGameChannel onlineChannel, int localPlayerIndex) {
+        setMinimumSize(new Dimension(920, 620));
         panelTop = new PlayerPanel(modele, modele.getJoueurs()[0], true);
         panelBottom = new PlayerPanel(modele, modele.getJoueurs()[1], false);
         plateau = new BoardPanel(modele);
         TurnGlowPanel turnGlow = new TurnGlowPanel(modele);
 
+        OnlineSessionConnection networkSession = this.onlineSessionConnection;
         controleur = new GameController(modele, this, plateau, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth, networkSession,
                 localPlayerIndex);
         plateau.setController(controleur);
 
-        JButton quitButton = createQuitButton();
-        JButton helpButton = createHelpButton();
+        this.quitButton = createQuitButton();
+        this.helpButton = createHelpButton();
 
         JPanel topLeftBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
         topLeftBar.setOpaque(false);
-        if (networkSession == null) {
-            JButton saveButton = createSaveButton(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth);
-            JButton loadButton = createLoadButton();
-            topLeftBar.add(saveButton);
-            topLeftBar.add(loadButton);
+        this.undoButton = (networkSession == null) ? createUndoButton(modele) : null;
+        this.redoButton = (networkSession == null) ? createRedoButton(modele) : null;
+        if (undoButton != null) {
+            topLeftBar.add(undoButton);
         }
+        if (redoButton != null) {
+            topLeftBar.add(redoButton);
+        }
+
+        modele.addModelListener(() -> {
+            updateButtonsState();
+        });
 
         JPanel topRightBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
         topRightBar.setOpaque(false);
-        topRightBar.add(helpButton);
-        topRightBar.add(undoButton);
+        this.rejouerButton = (networkSession == null) ? createRejouerButton() : null;
+        if (rejouerButton != null) {
+            topRightBar.add(rejouerButton);
+        }
         topRightBar.add(quitButton);
 
         JPanel headerBar = new JPanel(new BorderLayout());
         headerBar.setOpaque(false);
         headerBar.add(topLeftBar, BorderLayout.WEST);
         headerBar.add(topRightBar, BorderLayout.EAST);
+
+        JPanel bottomLeftBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        bottomLeftBar.setOpaque(false);
+        if (networkSession == null) {
+            this.saveButton = createSaveButton(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth);
+            this.loadButton = createLoadButton();
+            bottomLeftBar.add(saveButton);
+            bottomLeftBar.add(loadButton);
+        } else {
+            this.saveButton = null;
+            this.loadButton = null;
+        }
+
+        JPanel bottomRightBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+        bottomRightBar.setOpaque(false);
+        bottomRightBar.add(helpButton);
+
+        JPanel footerBar = new JPanel(new BorderLayout());
+        footerBar.setOpaque(false);
+        footerBar.add(bottomLeftBar, BorderLayout.WEST);
+        footerBar.add(bottomRightBar, BorderLayout.EAST);
 
         JPanel hud = new JPanel(new BorderLayout());
         hud.setOpaque(false);
@@ -359,6 +409,7 @@ public class MainFrame extends JFrame {
         hud.add(headerBar, BorderLayout.NORTH);
         hud.add(panelTop, BorderLayout.WEST);
         hud.add(panelBottom, BorderLayout.EAST);
+        hud.add(footerBar, BorderLayout.SOUTH);
 
         JLayeredPane gameRoot = new JLayeredPane() {
             @Override
@@ -379,6 +430,7 @@ public class MainFrame extends JFrame {
         gameRoot.add(hud, JLayeredPane.PALETTE_LAYER);
 
         setContentPane(gameRoot);
+        updateButtonsState();
         revalidate();
         repaint();
     }
@@ -390,26 +442,37 @@ public class MainFrame extends JFrame {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                         java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) {
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
                     g2.setColor(new Color(66, 135, 245, 210));
                 } else {
                     g2.setColor(new Color(88, 87, 94, 200));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-                g2.setColor(new Color(255, 255, 255, 40));
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
                 g2.dispose();
                 super.paintComponent(g);
             }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
+            }
         };
 
         btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btn.setForeground(new Color(220, 220, 230));
+        btn.setMargin(new Insets(0, 0, 0, 0));
         btn.setOpaque(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(120, 32));
         btn.addActionListener(e -> sauvegarderPartie(modele, p1IsAi, p1AiDepth, p2IsAi, p2AiDepth));
         return btn;
@@ -422,29 +485,71 @@ public class MainFrame extends JFrame {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                         java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) {
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
                     g2.setColor(new Color(104, 214, 132, 210));
                 } else {
                     g2.setColor(new Color(88, 87, 94, 200));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-                g2.setColor(new Color(255, 255, 255, 40));
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
                 g2.dispose();
                 super.paintComponent(g);
             }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
+            }
         };
 
         btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btn.setForeground(new Color(220, 220, 230));
+        btn.setMargin(new Insets(0, 0, 0, 0));
         btn.setOpaque(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(120, 32));
         btn.addActionListener(e -> chargerPartie());
         return btn;
+    }
+
+    public void updateButtonsState() {
+        if (controleur == null) {
+            return;
+        }
+        GameModel model = controleur.getModel();
+        if (model == null) {
+            return;
+        }
+
+        boolean blocked = controleur.isLocalInputBlocked();
+        boolean notStarted = model.estNouvellePartieNonCommencee();
+        boolean isPlacing = model.getPhase() == GameModel.GamePhase.PLACING;
+        boolean isOnline = (onlineSessionConnection != null);
+
+        if (undoButton != null) {
+            undoButton.setEnabled(!isOnline && isPlacing && !blocked && !notStarted && model.peutAnnuler());
+        }
+        if (redoButton != null) {
+            redoButton.setEnabled(!isOnline && isPlacing && !blocked && !notStarted && model.peutRefaire());
+        }
+        if (saveButton != null) {
+            saveButton.setEnabled(!isOnline && isPlacing && !blocked && !notStarted);
+        }
+        if (loadButton != null) {
+            loadButton.setEnabled(!isOnline && isPlacing && !blocked);
+        }
+        if (rejouerButton != null) {
+            rejouerButton.setEnabled(isPlacing || model.getPhase() == GameModel.GamePhase.FINISHED);
+        }
     }
 
     private void sauvegarderPartie(GameModel modele, boolean p1IsAi, int p1AiDepth, boolean p2IsAi, int p2AiDepth) {
@@ -474,7 +579,7 @@ public class MainFrame extends JFrame {
             java.io.File file = fileChooser.getSelectedFile();
             try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
                 lacuna.model.SaveState state = (lacuna.model.SaveState) ois.readObject();
-                initialiserInterface(state.model, state.p1IsAi, state.p1AiDepth, state.p2IsAi, state.p2AiDepth, null, -1);
+                afficherInterfaceJeu(state.model, state.p1IsAi, state.p1AiDepth, state.p2IsAi, state.p2AiDepth, null, -1);
                 JOptionPane.showMessageDialog(this, "Partie chargée avec succès !", "Chargement", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -595,7 +700,7 @@ public class MainFrame extends JFrame {
         if (isOnlineSession) {
             retourMenuPrincipal();
         } else if (lastNom1 != null) {
-            construireInterface(lastNom1, lastNom2, lastP1IsAi, lastP1AiDepth, lastP2IsAi, lastP2AiDepth, 0, null, -1);
+            construireInterface(lastNom1, lastNom2, lastP1IsAi, lastP1AiDepth, lastP2IsAi, lastP2AiDepth, null, -1);
         } else {
             afficherMenu();
         }
@@ -617,6 +722,12 @@ public class MainFrame extends JFrame {
         }
     }
 
+    public void refaireCoup() {
+        if (controleur != null) {
+            controleur.refaireCoup();
+        }
+    }
+
     private JButton createUndoButton(GameModel modele) {
         JButton btn = new JButton("UNDO") {
             @Override
@@ -624,16 +735,28 @@ public class MainFrame extends JFrame {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                         java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) {
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
                     g2.setColor(new Color(120, 118, 130, 210));
                 } else {
                     g2.setColor(new Color(88, 87, 94, 200));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-                g2.setColor(new Color(255, 255, 255, 40));
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
                 g2.dispose();
                 super.paintComponent(g);
+            }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
             }
         };
 
@@ -642,14 +765,12 @@ public class MainFrame extends JFrame {
             public void paintIcon(Component c, Graphics g, int x, int y) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(220, 220, 230));
+                g2.setColor(c.isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118));
                 g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
                 java.awt.geom.GeneralPath path = new java.awt.geom.GeneralPath();
-                // Draw curved arrow body (starts bottom right, curves up and left)
                 path.moveTo(x + 13, y + 11);
                 path.curveTo(x + 13, y + 2, x + 6, y + 2, x + 2, y + 6);
-                // Draw arrow head
                 path.moveTo(x + 2, y + 6);
                 path.lineTo(x + 7, y + 6);
                 path.moveTo(x + 2, y + 6);
@@ -673,14 +794,164 @@ public class MainFrame extends JFrame {
         btn.setIcon(undoIcon);
         btn.setIconTextGap(6);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(new Color(220, 220, 230));
+        btn.setMargin(new Insets(0, 0, 0, 0));
         btn.setOpaque(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(100, 32));
         btn.addActionListener(e -> annulerCoup());
+        return btn;
+    }
+
+    private JButton createRedoButton(GameModel modele) {
+        JButton btn = new JButton("REDO") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
+                    g2.setColor(new Color(120, 118, 130, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
+            }
+        };
+
+        Icon redoIcon = new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(c.isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118));
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                java.awt.geom.GeneralPath path = new java.awt.geom.GeneralPath();
+                path.moveTo(x + 1, y + 11);
+                path.curveTo(x + 1, y + 2, x + 8, y + 2, x + 12, y + 6);
+                path.moveTo(x + 12, y + 6);
+                path.lineTo(x + 7, y + 6);
+                path.moveTo(x + 12, y + 6);
+                path.lineTo(x + 12, y + 1);
+
+                g2.draw(path);
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return 16;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 14;
+            }
+        };
+
+        btn.setIcon(redoIcon);
+        btn.setIconTextGap(6);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setMargin(new Insets(0, 0, 0, 0));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setPreferredSize(new Dimension(100, 32));
+        btn.addActionListener(e -> refaireCoup());
+        return btn;
+    }
+
+    private JButton createRejouerButton() {
+        JButton btn = new JButton("REJOUER") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
+                    g2.setColor(new Color(66, 135, 245, 210));
+                } else {
+                    g2.setColor(new Color(88, 87, 94, 200));
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
+            }
+        };
+
+        Icon replayIcon = new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(c.isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118));
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                g2.drawArc(x + 2, y + 2, 10, 10, 45, 270);
+                g2.drawLine(x + 7, y + 2, x + 7, y + 5);
+                g2.drawLine(x + 7, y + 2, x + 10, y + 2);
+
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return 14;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return 14;
+            }
+        };
+
+        btn.setIcon(replayIcon);
+        btn.setIconTextGap(6);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setMargin(new Insets(0, 0, 0, 0));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setPreferredSize(new Dimension(110, 32));
+        btn.addActionListener(e -> {
+            if (ReplayGameDialog.confirm(this)) {
+                relancerPartie();
+            }
+        });
         return btn;
     }
 
@@ -691,16 +962,28 @@ public class MainFrame extends JFrame {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                         java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) {
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
                     g2.setColor(new Color(66, 135, 245, 210));
                 } else {
                     g2.setColor(new Color(88, 87, 94, 200));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-                g2.setColor(new Color(255, 255, 255, 40));
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
                 g2.dispose();
                 super.paintComponent(g);
+            }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
             }
         };
 
@@ -709,10 +992,9 @@ public class MainFrame extends JFrame {
             public void paintIcon(Component c, Graphics g, int x, int y) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(220, 220, 230));
+                g2.setColor(c.isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118));
                 g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
-                // Draw a beautiful small question mark icon
                 g2.drawArc(x + 2, y + 2, 8, 8, -40, 220);
                 g2.drawLine(x + 10, y + 6, x + 6, y + 9);
                 g2.drawLine(x + 6, y + 9, x + 6, y + 10);
@@ -735,13 +1017,12 @@ public class MainFrame extends JFrame {
         btn.setIcon(helpIcon);
         btn.setIconTextGap(6);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(new Color(220, 220, 230));
+        btn.setMargin(new Insets(0, 0, 0, 0));
         btn.setOpaque(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setPreferredSize(new Dimension(110, 32));
+        btn.setPreferredSize(new Dimension(135, 32));
         btn.addActionListener(e -> afficherTutoriel());
         return btn;
     }
@@ -753,16 +1034,28 @@ public class MainFrame extends JFrame {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                         java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isRollover()) {
-                    g2.setColor(new Color(239, 80, 88, 210)); // Reddish color for quit
+                if (!isEnabled()) {
+                    g2.setColor(new Color(40, 39, 46, 120));
+                } else if (getModel().isRollover()) {
+                    g2.setColor(new Color(239, 80, 88, 210));
                 } else {
                     g2.setColor(new Color(88, 87, 94, 200));
                 }
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
-                g2.setColor(new Color(255, 255, 255, 40));
+                g2.setColor(isEnabled() ? new Color(255, 255, 255, 40) : new Color(255, 255, 255, 15));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
                 g2.dispose();
                 super.paintComponent(g);
+            }
+
+            @Override
+            public Color getForeground() {
+                return isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118);
+            }
+
+            @Override
+            public Cursor getCursor() {
+                return isEnabled() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor();
             }
         };
 
@@ -771,7 +1064,7 @@ public class MainFrame extends JFrame {
             public void paintIcon(Component c, Graphics g, int x, int y) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(220, 220, 230));
+                g2.setColor(c.isEnabled() ? new Color(220, 220, 230) : new Color(110, 108, 118));
                 g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 
                 g2.drawLine(x + 2, y + 2, x + 10, y + 10);
@@ -794,12 +1087,11 @@ public class MainFrame extends JFrame {
         btn.setIcon(quitIcon);
         btn.setIconTextGap(6);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(new Color(220, 220, 230));
+        btn.setMargin(new Insets(0, 0, 0, 0));
         btn.setOpaque(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(100, 32));
         btn.addActionListener(e -> {
             if (QuitGameDialog.confirm(this)) {

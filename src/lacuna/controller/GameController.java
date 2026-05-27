@@ -28,8 +28,6 @@ public class GameController {
     private final GameModel model;
     private final MainFrame mainFrame;
     private final BoardPanel boardPanel;
-    private final int aiPlayerIndex;
-    private final int aiDepth;
     private final OnlineGameChannel onlineChannel;
     private final boolean p1IsAi;
     private final int p1AiDepth;
@@ -58,6 +56,7 @@ public class GameController {
         this.p2IsAi = p2IsAi;
         this.p2AiDepth = p2AiDepth;
         this.networkSession = networkSession;
+        this.onlineChannel = networkSession != null ? new OnlineGameChannel(networkSession) : null;
         this.localPlayerIndex = localPlayerIndex;
         
         if (onlineChannel != null) {
@@ -133,6 +132,7 @@ public class GameController {
             aiWorker.cancel(true);
         }
         aiThinking = false;
+        mainFrame.updateButtonsState();
     }
 
     private void traiterCoupReseau(OnlineMove move) {
@@ -270,6 +270,7 @@ public class GameController {
             if (aiTimer != null) aiTimer.stop();
             if (aiWorker != null) aiWorker.cancel(true);
             aiThinking = false;
+            mainFrame.updateButtonsState();
         }
         if (!model.peutAnnuler()) return;
 
@@ -278,9 +279,28 @@ public class GameController {
         declencherCoupIASiNecessaire();
     }
 
+    public void refaireCoup() {
+        if (onlineChannel != null) return;
+        if (model.getPhase() != GameModel.GamePhase.PLACING) return;
+        if (!model.peutRefaire()) return;
+
+        if (aiThinking) {
+            if (aiTimer != null) aiTimer.stop();
+            if (aiWorker != null) aiWorker.cancel(true);
+            aiThinking = false;
+            mainFrame.updateButtonsState();
+        }
+        if (!model.peutRefaire()) return;
+
+        model.refaireDernierCoup();
+        boardPanel.onRedoPerformed();
+        declencherCoupIASiNecessaire();
+    }
+
     private void schedulerCoupIA() {
         if (aiThinking) return;
         aiThinking = true;
+        mainFrame.updateButtonsState();
 
         aiTimer = new Timer(AI_THINK_DELAY_MS, e -> {
             aiWorker = new SwingWorker<>() {
@@ -302,6 +322,7 @@ public class GameController {
                 protected void done() {
                     if (isCancelled()) return;
                     aiThinking = false;
+                    mainFrame.updateButtonsState();
                     try {
                         AIMove move = get();
                         if (move != null) {
@@ -441,6 +462,10 @@ public class GameController {
 
     public boolean isLocalMatch() {
         return networkSession == null;
+    }
+
+    public GameModel getModel() {
+        return model;
     }
 
     public void demarrerPartieAvecStarter(int starterIndex) {
